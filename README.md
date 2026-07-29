@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-第一阶段核心架构和第二阶段高德 Adapter 的离线实现已经完成：
+前五个阶段已经完成：
 
 - 与地图供应商无关的地点、路线、环境特征和评分模型；
 - WGS-84 与 GCJ-02 类型边界；
@@ -20,9 +20,14 @@
 - 集中的 GCJ-02/WGS-84 转换；
 - 集中的超时、有限重试、取消、额度和错误转换；
 - 途经点路段拆分、调用上限和路线合并；
-- 不使用真实 Key 的高德 fixture 与契约测试。
+- 高德离线契约测试和受控在线冒烟；
+- ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
+- 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
+- React Web UI、路线条件、结果比较和 GeoJSON 几何预览；
+- 桌面和移动端浏览器验收，以及 64 个自动化测试。
 
-当前仓库不包含旧原型页面、高德 Key、真实网络冒烟测试、WorldCover 接入、Worker API、数据库或部署配置。
+服务端 Key 只通过环境变量注入，仓库不包含任何真实 Key。数据库、鉴权、路线
+导出、收藏、分享和生产部署将在后续阶段完成。
 
 ## 架构边界
 
@@ -43,6 +48,8 @@ findScenicRoutes
 高德基础设施代码位于 `src/adapters/amap`，只实现 `PlaceProvider` 和 `RouteProvider`，不会反向进入路线核心。
 
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
+Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
+[接口文档](docs/SERVER_API.md)。
 
 ## 开发命令
 
@@ -55,4 +62,5 @@ pnpm run build
 
 ## 下一阶段
 
-先使用服务端 Web Service Key 运行少量受控冒烟测试，确认账号权限和上游响应仍符合 fixture。之后进入环境特征 Adapter 阶段，不修改核心算法和前端页面。
+第六阶段增加 GPX、GeoJSON 和地图 App 交付，以及可控的路线保存、分享和反馈
+能力；第七阶段完成部署配置、Secret、限流、监控、日志脱敏和生产健康检查。

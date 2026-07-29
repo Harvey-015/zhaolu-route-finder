@@ -1,6 +1,7 @@
 import type { AddressInfo } from "node:net";
 import { pathToFileURL } from "node:url";
 import { generateDirectionalCandidates } from "../src/route-recommendation/candidateGeneration.ts";
+import { wgs84Point } from "../src/route-recommendation/coordinates.ts";
 import { selectDiverseRoutes } from "../src/route-recommendation/diversity.ts";
 import {
   FakePlaceProvider,
@@ -32,8 +33,17 @@ export type ServerApiSmokeResult =
       planCallCount: number;
     }>;
 
-function fixturePlanner() {
-  const placeProvider = new FakePlaceProvider();
+export function createFixturePlanner() {
+  const placeProvider = new FakePlaceProvider({
+    杭州西湖: {
+      id: "fixture:hangzhou-west-lake",
+      name: "杭州西湖",
+      point: wgs84Point(120.148, 30.244),
+      source: {
+        providerId: "fixture-place",
+      },
+    },
+  });
   const routeProvider = new FakeRouteProvider();
   const sceneryProvider = new FakeSceneryProvider();
   const scoringPolicy = new ScenicScoreV1();
@@ -81,7 +91,7 @@ async function close(server: ReturnType<typeof createNodeApiServer>) {
 }
 
 export async function runServerApiSmoke(): Promise<ServerApiSmokeResult> {
-  const planner = fixturePlanner();
+  const planner = createFixturePlanner();
   const server = createNodeApiServer(
     createServerApi({
       planRoutes: planner.planRoutes,
