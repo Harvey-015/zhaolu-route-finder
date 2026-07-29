@@ -1,0 +1,30 @@
+{
+  "status": "1",
+  "info": "OK",
+  "infocode": "10000",
+  "count": "1",
+  "route": {
+    "origin": "120.153576,30.244450",
+    "destination": "120.154300,30.245100",
+    "paths": [
+      {
+        "distance": "120",
+        "cost": {
+          "duration": "90"
+        },
+        "steps": [
+          {
+            "instruction": "沿测试步道向东北步行",
+            "orientation": "东北",
+            "road_name": "测试步道",
+            "step_distance": "120",
+            "cost": {
+              "duration": "90"
+            },
+            "polyline": "120.153576,30.244450;120.154300,30.245100"
+          }
+        ]
+      }
+    ]
+  }
+}
