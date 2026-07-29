@@ -19,7 +19,7 @@
 
 当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、SQLite、匿名签名会话、收藏、反馈和过期策略。生产部署与运行保障仍不在当前实现范围。
+第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、SQLite、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成统一生产运行时、容器定义、CI、Secret 校验、限流、就绪探针、受保护指标、脱敏日志、优雅关闭和只读生产烟雾。实际生产发布仍取决于外部部署平台、域名、TLS、Secret 和数据卷。
 
 ## 2. 架构原则
 
@@ -777,12 +777,15 @@ Core 不反向依赖 Adapters
 - 完整环线以找路网页和 GPX 为准；
 - 后台定位、逐向导航和可视化几何编辑仍留给未来原生 App。
 
-### 阶段七：部署与运行保障
+### 阶段七：部署与运行保障（仓库实现已完成）
 
-- 配置服务端 Secret、限流、监控和日志脱敏；
-- 部署 API 与 Web；
-- 增加生产环境健康检查和少量在线冒烟；
-- 根据实际负载决定缓存、Worker 或数据预计算。
+- 已配置启动时 Secret 校验、客户端限流、Prometheus 指标和 JSON 日志脱敏；
+- 已用单一 Node 运行时提供 API 与构建后的 Web；
+- 已增加 liveness、readiness、优雅关闭和定期过期清理；
+- 已增加多阶段非 root Dockerfile、Compose 数据卷和 GitHub Actions 镜像门禁；
+- 已增加不调用 Provider 的生产只读烟雾；
+- 实际发布需要外部容器平台、域名、TLS、Secret 和持久卷；
+- 横向扩容前按实际负载引入 Redis 与 PostgreSQL/PostGIS。
 
 ## 15. 架构决策摘要
 

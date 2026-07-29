@@ -30,6 +30,7 @@ http://127.0.0.1:8787
 
 ```text
 GET  /api/v1/health
+GET  /api/v1/ready
 GET  /api/v1/capabilities
 GET  /api/v1/openapi.json
 POST /api/v1/routes/plan
@@ -120,6 +121,9 @@ Provider 默认拒绝。
 
 API 不返回上游响应正文、内部异常消息或密钥。请求体上限为 64 KiB，单次规划
 默认最长 45 秒；HTTP 客户端取消会传递到核心及 Provider。
+
+生产运行时还提供需要独立 Bearer token 的 `/internal/metrics`。该接口不属于
+公共 v1 业务契约，细节见 `docs/DEPLOYMENT.md`。
 
 ## 本地离线冒烟
 

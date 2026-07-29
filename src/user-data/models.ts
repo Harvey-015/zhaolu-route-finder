@@ -47,6 +47,7 @@ export type FieldReport = Readonly<{
 }>;
 
 export interface UserDataStore {
+  isHealthy(): boolean;
   createSession(session: UserSession): void;
   hasSession(userId: string, now: number): boolean;
   saveRoute(record: SavedRouteRecord): void;

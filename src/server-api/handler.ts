@@ -11,6 +11,10 @@ import {
   type ServerApiErrorResponse,
 } from "./contracts.ts";
 import type { RouteDeliveryPolicyResolver } from "../route-delivery/policy.ts";
+import type {
+  ApiRateLimiter,
+  ApiRateLimitScope,
+} from "../runtime/rateLimit.ts";
 import {
   UserDataError,
   UserDataService,
@@ -39,6 +43,10 @@ export type CreateServerApiOptions = Readonly<{
   requestIdFactory?: () => string;
   deliveryPolicyResolver?: RouteDeliveryPolicyResolver;
   userData?: UserDataService;
+  rateLimiter?: ApiRateLimiter;
+  readinessCheck?: () => Promise<
+    Readonly<Record<string, "ok" | "error">>
+  >;
 }>;
 
 class ApiTransportError extends Error {
@@ -63,7 +71,11 @@ function responseHeaders(requestId: string): Headers {
   return new Headers({
     "cache-control": "no-store",
     "content-type": "application/json; charset=utf-8",
+    "permissions-policy":
+      "camera=(), geolocation=(), microphone=()",
+    "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
     "x-request-id": requestId,
   });
 }
@@ -195,6 +207,17 @@ function healthPayload() {
   } as const;
 }
 
+function rateLimitScope(
+  pathname: string,
+): ApiRateLimitScope | null {
+  if (pathname === "/api/v1/routes/plan") return "plan";
+  if (pathname === "/api/v1/session") return "session";
+  if (pathname.startsWith("/api/v1/saved-routes")) {
+    return "user-data";
+  }
+  return null;
+}
+
 function capabilitiesPayload(userDataAvailable: boolean) {
   return {
     schemaVersion: SERVER_API_SCHEMA_VERSION,
@@ -293,6 +316,26 @@ export function createServerApi(
   return async (request) => {
     let requestId = fallbackRequestId(request, requestIdFactory);
     const pathname = new URL(request.url).pathname;
+    const scope = rateLimitScope(pathname);
+    if (scope && options.rateLimiter) {
+      const result = options.rateLimiter.consume(
+        request.headers.get("x-zhaolu-client-key") ?? "unknown",
+        scope,
+      );
+      if (!result.allowed) {
+        return errorResponse(
+          requestId,
+          429,
+          "RATE_LIMITED",
+          true,
+          undefined,
+          {
+            "retry-after": String(result.retryAfterSeconds),
+            "x-rate-limit-remaining": "0",
+          },
+        );
+      }
+    }
 
     if (pathname === "/api/v1/health") {
       if (request.method !== "GET") {
@@ -306,6 +349,40 @@ export function createServerApi(
         );
       }
       return jsonResponse(healthPayload(), 200, requestId);
+    }
+
+    if (pathname === "/api/v1/ready") {
+      if (request.method !== "GET") {
+        return errorResponse(
+          requestId,
+          405,
+          "METHOD_NOT_ALLOWED",
+          false,
+          undefined,
+          { allow: "GET" },
+        );
+      }
+      let checks: Readonly<Record<string, "ok" | "error">>;
+      try {
+        checks = options.readinessCheck
+          ? await options.readinessCheck()
+          : { api: "ok" };
+      } catch {
+        checks = { runtime: "error" };
+      }
+      const ready = Object.values(checks).every(
+        (status) => status === "ok",
+      );
+      return jsonResponse(
+        {
+          schemaVersion: SERVER_API_SCHEMA_VERSION,
+          service: "zhaolu-route-finder",
+          status: ready ? "ready" : "not-ready",
+          checks,
+        },
+        ready ? 200 : 503,
+        requestId,
+      );
     }
 
     if (pathname === "/api/v1/capabilities") {

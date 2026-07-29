@@ -1,0 +1,22 @@
+services:
+  zhaolu:
+    build:
+      context: .
+    environment:
+      AMAP_WEB_SERVICE_KEY: ${AMAP_WEB_SERVICE_KEY:?required}
+      AMAP_CITY: ${AMAP_CITY:-}
+      ZHAOLU_SESSION_SECRET: ${ZHAOLU_SESSION_SECRET:?required}
+      ZHAOLU_OBSERVABILITY_TOKEN: ${ZHAOLU_OBSERVABILITY_TOKEN:?required}
+      RATE_LIMIT_PLAN_PER_MINUTE: ${RATE_LIMIT_PLAN_PER_MINUTE:-30}
+      RATE_LIMIT_SESSION_PER_HOUR: ${RATE_LIMIT_SESSION_PER_HOUR:-10}
+      RATE_LIMIT_USER_DATA_PER_MINUTE: ${RATE_LIMIT_USER_DATA_PER_MINUTE:-120}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+    stop_grace_period: 15s
+    volumes:
+      - zhaolu-data:/app/data
+
+volumes:
+  zhaolu-data:

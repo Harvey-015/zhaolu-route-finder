@@ -1,0 +1,111 @@
+# 部署与运行保障
+
+第七阶段提供单容器模块化单体：同一个 Node 进程提供 `/api/v1`、构建后的 React
+静态文件、就绪探针和受保护的 Prometheus 指标。
+
+## 运行前提
+
+- Node 24（容器基线）；
+- 高德 Web Service Key；
+- 两个彼此独立、至少 32 字符的随机 Secret：
+  `ZHAOLU_SESSION_SECRET` 和 `ZHAOLU_OBSERVABILITY_TOKEN`；
+- SQLite 数据卷的持久目录；
+- 外部 HTTPS 反向代理或负载均衡器。
+
+复制 `.env.example` 到部署平台的 Secret/环境变量配置，不要把实际值写回文件或
+Git。生产配置校验会在监听端口前失败，错误只包含变量名，不包含变量值。
+
+## 本地生产运行
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run build
+$env:AMAP_WEB_SERVICE_KEY = "<server-key>"
+$env:ZHAOLU_SESSION_SECRET = "<random-secret-at-least-32-characters>"
+$env:ZHAOLU_OBSERVABILITY_TOKEN = "<different-random-secret-at-least-32-characters>"
+pnpm run start:production
+```
+
+默认监听 `0.0.0.0:8787`，静态文件来自 `web-dist`，数据库为
+`data/zhaolu.sqlite`。
+
+## 容器
+
+```powershell
+docker compose up --build
+```
+
+`Dockerfile` 使用 Node 24、多阶段构建、非 root 用户、只复制生产依赖，并声明：
+
+- `/app/data` 数据卷；
+- `8787` 服务端口；
+- `/api/v1/ready` 容器健康检查；
+- `SIGTERM` 优雅关闭和 10 秒默认排空窗口。
+
+当前机器未安装 Docker，因此仓库内已验证 TypeScript 构建和统一生产运行时，
+镜像构建由 GitHub Actions 的 `container` job 验证。
+
+## 探针和监控
+
+```text
+GET /api/v1/health   # 进程存活
+GET /api/v1/ready    # SQLite 和 web-dist 就绪
+GET /internal/metrics
+```
+
+指标接口必须携带：
+
+```text
+Authorization: Bearer <ZHAOLU_OBSERVABILITY_TOKEN>
+```
+
+指标只使用归一化路径，不记录查询字符串、收藏 UUID、地点、token、Key 或请求
+正文。JSON 日志同样只记录方法、归一化路径、状态、耗时和 request id。
+
+## 限流
+
+默认单进程固定窗口：
+
+- 路线规划：每客户端每分钟 30 次；
+- 匿名会话：每客户端每小时 10 次；
+- 收藏/反馈：每客户端每分钟 120 次。
+
+可用 `.env.example` 中的变量调整。响应为稳定的 `RATE_LIMITED` 错误，并携带
+`Retry-After`。
+
+限流器在进程内，SQLite 也面向单实例部署。需要横向扩容前，应把限流替换为
+Redis，把 `UserDataStore` 替换为 PostgreSQL/PostGIS；不要直接运行多个共享
+同一 SQLite 文件的容器。
+
+## 数据、备份和过期
+
+启动时和每小时清理过期会话、收藏和反馈。数据卷需要平台快照或停机文件备份。
+恢复演练应确认：
+
+1. SQLite 文件能打开且 `/api/v1/ready` 返回 `ready`；
+2. 匿名收藏仍按 user id 隔离；
+3. 高德路线仍只有 metadata，不出现长期 geometry。
+
+## 生产烟雾
+
+部署后执行：
+
+```powershell
+$env:PRODUCTION_BASE_URL = "https://routes.example.com"
+pnpm run smoke:production
+```
+
+烟雾只发 4 个只读请求：health、ready、capabilities 和 Web 首页；不会调用路线
+Provider，也不消耗高德或 WorldCover 配额。
+
+## 发布门禁
+
+`.github/workflows/ci.yml` 在 push 和 PR 上执行：
+
+1. 锁文件安装；
+2. typecheck；
+3. 完整测试与生产构建；
+4. Docker 镜像构建。
+
+真正发布仍需要选定容器平台、域名、TLS、Secret 注入和数据卷；这些是仓库外的
+部署状态，不应在没有账号和目标环境时假装完成。

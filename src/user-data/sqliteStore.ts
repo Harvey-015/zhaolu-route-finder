@@ -94,6 +94,13 @@ export class SqliteUserDataStore implements UserDataStore {
     `);
   }
 
+  isHealthy(): boolean {
+    const result = this.database
+      .prepare("SELECT 1 AS healthy")
+      .get() as { healthy?: number } | undefined;
+    return result?.healthy === 1;
+  }
+
   createSession(session: UserSession): void {
     this.database
       .prepare(

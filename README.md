@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-前六个阶段已经完成：
+七个阶段的仓库实现已经完成：
 
 - 与地图供应商无关的地点、路线、环境特征和评分模型；
 - WGS-84 与 GCJ-02 类型边界；
@@ -29,10 +29,12 @@
 - Provider policy 控制的路线持久化与过期策略；
 - 匿名签名会话、SQLite 收藏和现场反馈；
 - 共享搜索条件和按路线实际距离重新规划；
-- 73 个自动化测试。
+- 单进程生产运行时、Docker/Compose 和 GitHub Actions；
+- 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
+- 78 个自动化测试。
 
 服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
-生产部署、限流、可观测性和生产烟雾测试将在第七阶段完成。
+实际生产发布仍需要外部容器平台、域名、TLS、Secret 注入和持久数据卷。
 
 ## 架构边界
 
@@ -55,7 +57,8 @@ findScenicRoutes
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
 Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
 [接口文档](docs/SERVER_API.md)，路线交付和数据策略见
-[路线交付文档](docs/ROUTE_DELIVERY.md)。
+[路线交付文档](docs/ROUTE_DELIVERY.md)，生产运行见
+[部署文档](docs/DEPLOYMENT.md)。
 
 ## 开发命令
 
@@ -68,4 +71,5 @@ pnpm run build
 
 ## 下一阶段
 
-第七阶段完成部署配置、Secret、限流、监控、日志脱敏和生产健康检查。
+选择生产容器平台并配置域名、TLS、Secret 与 SQLite 持久卷；发布后运行只读
+生产烟雾。需要多实例时，再把限流迁移到 Redis、数据层迁移到 PostgreSQL。

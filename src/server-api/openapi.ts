@@ -22,6 +22,20 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/ready": {
+      get: {
+        operationId: "getReadiness",
+        responses: {
+          "200": {
+            description:
+              "Database and static assets are ready to serve traffic.",
+          },
+          "503": {
+            description: "At least one runtime dependency is not ready.",
+          },
+        },
+      },
+    },
     "/api/v1/capabilities": {
       get: {
         operationId: "getCapabilities",

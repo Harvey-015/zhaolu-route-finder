@@ -169,6 +169,9 @@ test("exposes stable health and capability discovery endpoints", async () => {
   const health = await handler(
     new Request("http://localhost/api/v1/health"),
   );
+  const readiness = await handler(
+    new Request("http://localhost/api/v1/ready"),
+  );
   const capabilities = await handler(
     new Request("http://localhost/api/v1/capabilities"),
   );
@@ -176,6 +179,8 @@ test("exposes stable health and capability discovery endpoints", async () => {
     new Request("http://localhost/api/v1/openapi.json"),
   );
   const healthBody = (await health.json()) as Record<string, unknown>;
+  const readinessBody =
+    (await readiness.json()) as Record<string, unknown>;
   const capabilitiesBody =
     (await capabilities.json()) as Record<string, unknown>;
   const openApiBody = (await openApi.json()) as {
@@ -185,6 +190,8 @@ test("exposes stable health and capability discovery endpoints", async () => {
 
   assert.equal(health.status, 200);
   assert.equal(healthBody.status, "ok");
+  assert.equal(readiness.status, 200);
+  assert.equal(readinessBody.status, "ready");
   assert.equal(capabilities.status, 200);
   assert.equal(
     capabilitiesBody.coordinateReferenceSystem,
@@ -197,6 +204,7 @@ test("exposes stable health and capability discovery endpoints", async () => {
   );
   assert.equal(openApi.status, 200);
   assert.equal(openApiBody.openapi, "3.1.0");
+  assert.ok("/api/v1/ready" in openApiBody.paths);
   assert.ok("/api/v1/routes/plan" in openApiBody.paths);
   assert.ok("/api/v1/session" in openApiBody.paths);
   assert.ok("/api/v1/saved-routes" in openApiBody.paths);

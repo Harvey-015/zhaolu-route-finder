@@ -17,9 +17,11 @@
     "preview:web": "vite preview --config vite.config.ts",
     "smoke:api": "node --experimental-strip-types scripts/smoke-server-api.ts",
     "smoke:amap": "node --experimental-strip-types scripts/smoke-amap.ts",
+    "smoke:production": "node --experimental-strip-types scripts/smoke-production.ts",
     "smoke:worldcover": "node --experimental-strip-types scripts/smoke-worldcover.ts",
     "start:api": "node --experimental-strip-types scripts/start-api.ts",
-    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts tests/scoring.test.ts tests/amap-adapters.test.ts tests/amap-smoke.test.ts tests/worldcover-adapter.test.ts tests/worldcover-smoke.test.ts tests/server-api.test.ts tests/server-api-smoke.test.ts tests/web-client.test.ts tests/route-delivery.test.ts tests/user-data.test.ts",
+    "start:production": "node --disable-warning=ExperimentalWarning dist/runtime/main.js",
+    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts tests/scoring.test.ts tests/amap-adapters.test.ts tests/amap-smoke.test.ts tests/worldcover-adapter.test.ts tests/worldcover-smoke.test.ts tests/server-api.test.ts tests/server-api-smoke.test.ts tests/web-client.test.ts tests/route-delivery.test.ts tests/user-data.test.ts tests/runtime-operations.test.ts",
     "typecheck": "pnpm run typecheck:core && pnpm run typecheck:web",
     "typecheck:core": "tsc -p tsconfig.json",
     "typecheck:web": "tsc -p tsconfig.web.json"
