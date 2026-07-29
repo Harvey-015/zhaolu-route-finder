@@ -17,9 +17,9 @@
 
 ### 1.1 当前实现范围
 
-当前仓库是正式版本的第一阶段核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
+当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-高德、WorldCover、Worker API、React 展示层、数据库、收藏、分享和部署均不在当前阶段。
+第二阶段已经增加高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略和离线契约测试。真实高德 Key、在线冒烟测试、WorldCover、Worker API、React 展示层、数据库、收藏、分享和部署仍不在当前实现范围。
 
 ## 2. 架构原则
 
@@ -538,19 +538,30 @@ type ScenicRoute = NormalizedRoute & {
 
 ```text
 src/
-└─ route-recommendation/
-   ├─ models.ts
-   ├─ coordinates.ts
-   ├─ errors.ts
-   ├─ ports.ts
-   ├─ strategies.ts
-   ├─ candidateGeneration.ts
-   ├─ diversity.ts
-   ├─ findScenicRoutes.ts
-   └─ fakes.ts
+├─ route-recommendation/
+│  ├─ models.ts
+│  ├─ coordinates.ts
+│  ├─ errors.ts
+│  ├─ ports.ts
+│  ├─ strategies.ts
+│  ├─ candidateGeneration.ts
+│  ├─ diversity.ts
+│  ├─ findScenicRoutes.ts
+│  └─ fakes.ts
+└─ adapters/
+   └─ amap/
+      ├─ coordinates.ts
+      ├─ dto.ts
+      ├─ errors.ts
+      ├─ httpClient.ts
+      ├─ mappers.ts
+      ├─ placeProvider.ts
+      └─ routeProvider.ts
 
 tests/
 ├─ route-recommendation-core.test.ts
+├─ amap-adapters.test.ts
+├─ fixtures/amap/
 └─ types/
 
 docs/
@@ -720,13 +731,16 @@ Core 不反向依赖 Adapters
 - 注入 Candidate、Score、Selection 策略；
 - 增加 Fake Provider、预算、取消、降级和错误契约测试。
 
-### 阶段二：高德 Adapter
+### 阶段二：高德 Adapter（离线实现已完成）
 
-- 增加高德地点与路线 DTO；
-- 在 Adapter 边界完成 GCJ-02/WGS-84 转换；
-- 将高德响应映射为内部模型；
-- 增加 Mapper fixture 和 Provider 契约测试；
-- 在服务端组装高德实现，不修改核心算法。
+- 已增加高德地点与路线 DTO；
+- 已在 Adapter 边界完成 GCJ-02/WGS-84 转换；
+- 已将高德响应映射为内部模型；
+- 已增加 Mapper fixture 和 Provider 契约测试；
+- 已集中处理超时、有限重试、取消、额度和稳定错误；
+- 已对不支持途经点的骑步行接口实施有上限的顺序分段和路线合并；
+- 待使用服务端 Key 做受控在线冒烟测试；
+- Worker/API 组装留到对应运行时阶段，不修改核心算法。
 
 ### 阶段三：环境数据 Adapter
 

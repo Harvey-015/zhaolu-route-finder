@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts",
+    "smoke:amap": "node --experimental-strip-types scripts/smoke-amap.ts",
+    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts tests/amap-adapters.test.ts tests/amap-smoke.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
