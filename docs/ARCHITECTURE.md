@@ -19,7 +19,7 @@
 
 当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。Server API、React 展示层、数据库、收藏、分享和部署仍不在当前实现范围。
+第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。React 展示层、数据库、收藏、分享和部署仍不在当前实现范围。
 
 ## 2. 架构原则
 
@@ -750,7 +750,7 @@ Core 不反向依赖 Adapters
 - 增加超时、取消、不可用和缺失覆盖降级；
 - 增加 Fake/fixture、Provider 契约和受控在线冒烟测试。
 
-### 阶段四：Server API
+### 阶段四：Server API（已完成）
 
 - 增加版本化路线推荐 REST API；
 - 在服务端组装高德、WorldCover、候选、评分和多样性策略；
