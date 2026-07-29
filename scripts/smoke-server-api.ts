@@ -10,6 +10,7 @@ import {
 } from "../src/route-recommendation/fakes.ts";
 import { findScenicRoutes } from "../src/route-recommendation/findScenicRoutes.ts";
 import { ScenicScoreV1 } from "../src/route-recommendation/scoring.ts";
+import { resolveFixtureRouteDeliveryPolicy } from "../src/route-delivery/policy.ts";
 import { createServerApi } from "../src/server-api/handler.ts";
 import { createNodeApiServer } from "../src/server-api/nodeServer.ts";
 
@@ -96,6 +97,7 @@ export async function runServerApiSmoke(): Promise<ServerApiSmokeResult> {
     createServerApi({
       planRoutes: planner.planRoutes,
       requestIdFactory: () => "server-api-generated",
+      deliveryPolicyResolver: resolveFixtureRouteDeliveryPolicy,
     }),
   );
   let httpRequestCount = 0;

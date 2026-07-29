@@ -6,20 +6,67 @@ import {
 } from "react";
 import type {
   ApiRecommendedRoute,
+  PlanRoutesApiRequest,
   PlanRoutesApiResponse,
 } from "../../src/server-api/contracts.ts";
+import type { SavedRouteSummary } from "../../src/user-data/models.ts";
 import { planRoutes, RouteApiError } from "./api.ts";
+import {
+  amapHandoffUrl,
+  createRouteShareUrl,
+  downloadRoute,
+  routeFormFromSearch,
+} from "./delivery.ts";
 import {
   buildPlanRequest,
   formatDistance,
   formatDuration,
   formatPercent,
-  INITIAL_ROUTE_FORM,
   ROUTE_COLORS,
   routeDisplayName,
   type RouteFormState,
 } from "./model.ts";
 import { RouteMap } from "./RouteMap.tsx";
+import {
+  createAnonymousSession,
+  deleteSavedRoute,
+  listSavedRoutes,
+  saveRoute,
+  sendFieldReport,
+  type AnonymousSession,
+} from "./userDataApi.ts";
+
+const SESSION_STORAGE_KEY = "zhaolu.anonymous-session.v1";
+
+function storedSession(): AnonymousSession | null {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(SESSION_STORAGE_KEY) ?? "null",
+    ) as unknown;
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      typeof (value as { token?: unknown }).token === "string" &&
+      typeof (value as { expiresAt?: unknown }).expiresAt ===
+        "number" &&
+      (value as { expiresAt: number }).expiresAt > Date.now()
+    ) {
+      return value as AnonymousSession;
+    }
+  } catch {
+    // A malformed local value is treated as no session.
+  }
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  return null;
+}
+
+function rememberSession(session: AnonymousSession): void {
+  localStorage.setItem(
+    SESSION_STORAGE_KEY,
+    JSON.stringify(session),
+  );
+}
 
 type SearchState =
   | Readonly<{ status: "idle" }>
@@ -283,22 +330,184 @@ function ResultsPanel({
   );
 }
 
+function DeliveryPanel({
+  route,
+  mode,
+  savedRoute,
+  notice,
+  onDownload,
+  onSave,
+  onShare,
+  onAdjust,
+  onFeedback,
+}: Readonly<{
+  route: ApiRecommendedRoute;
+  mode: RouteFormState["mode"];
+  savedRoute: SavedRouteSummary | null;
+  notice: string | null;
+  onDownload: (format: "geojson" | "gpx") => void;
+  onSave: () => void;
+  onShare: () => void;
+  onAdjust: () => void;
+  onFeedback: (rating: 1 | 2 | 3 | 4 | 5) => void;
+}>) {
+  const amapAllowed =
+    route.delivery.navigationTargets.includes("amap");
+  return (
+    <section className="delivery-panel" aria-label="路线交付">
+      <div className="delivery-heading">
+        <div>
+          <p className="eyebrow">带走这条路线</p>
+          <h3>导出、收藏或继续规划</h3>
+        </div>
+        <span>{route.delivery.policyId}</span>
+      </div>
+      <div className="delivery-actions">
+        {route.delivery.exportFormats.includes("gpx") ? (
+          <button onClick={() => onDownload("gpx")} type="button">
+            下载 GPX
+          </button>
+        ) : null}
+        {route.delivery.exportFormats.includes("geojson") ? (
+          <button
+            onClick={() => onDownload("geojson")}
+            type="button"
+          >
+            下载 GeoJSON
+          </button>
+        ) : null}
+        {amapAllowed ? (
+          <a
+            href={amapHandoffUrl(route, mode)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            高德到路线中点
+          </a>
+        ) : null}
+        <button onClick={onShare} type="button">
+          分享搜索条件
+        </button>
+        <button onClick={onAdjust} type="button">
+          按此距离重算
+        </button>
+        <button
+          disabled={
+            route.delivery.persistence === "denied" ||
+            savedRoute !== null
+          }
+          onClick={onSave}
+          type="button"
+        >
+          {savedRoute ? "已收藏" : "收藏路线"}
+        </button>
+      </div>
+      <p className="delivery-note">
+        高德只能接收到起点和路线中点；完整自定义环线请使用 GPX。
+        {route.delivery.persistence === "metadata-only"
+          ? " 当前 Provider 只长期保存路线摘要，不保存几何。"
+          : ""}
+      </p>
+      {savedRoute ? (
+        <div className="feedback-row">
+          <span>现场体验</span>
+          {([1, 2, 3, 4, 5] as const).map((rating) => (
+            <button
+              aria-label={`提交 ${rating} 分现场体验`}
+              key={rating}
+              onClick={() => onFeedback(rating)}
+              type="button"
+            >
+              {rating}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {notice ? (
+        <p className="delivery-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function SavedRoutesPanel({
+  routes,
+  onDelete,
+}: Readonly<{
+  routes: readonly SavedRouteSummary[];
+  onDelete: (routeId: string) => void;
+}>) {
+  if (routes.length === 0) return null;
+  return (
+    <section className="saved-routes" aria-label="已收藏路线">
+      <div className="saved-routes-heading">
+        <p className="eyebrow">设备收藏</p>
+        <span>{routes.length} 条</span>
+      </div>
+      {routes.map((route) => (
+        <div className="saved-route-row" key={route.id}>
+          <span>
+            <strong>{route.name}</strong>
+            <small>
+              {formatDistance(route.distanceMeters)} ·{" "}
+              {Math.round(route.score)} 分
+              {route.hasGeometry ? " · 含几何" : " · 仅摘要"}
+            </small>
+          </span>
+          <button
+            aria-label={`删除收藏 ${route.name}`}
+            onClick={() => onDelete(route.id)}
+            type="button"
+          >
+            删除
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function App() {
-  const [form, setForm] =
-    useState<RouteFormState>(INITIAL_ROUTE_FORM);
+  const [form, setForm] = useState<RouteFormState>(() =>
+    routeFormFromSearch(window.location.search),
+  );
   const [search, setSearch] = useState<SearchState>({
     status: "idle",
   });
   const [selectedRouteId, setSelectedRouteId] =
     useState<string | null>(null);
+  const [lastRequest, setLastRequest] =
+    useState<PlanRoutesApiRequest | null>(null);
+  const [savedRoutes, setSavedRoutes] = useState<
+    readonly SavedRouteSummary[]
+  >([]);
+  const [savedByResultRoute, setSavedByResultRoute] = useState<
+    Readonly<Record<string, SavedRouteSummary>>
+  >({});
+  const [deliveryNotice, setDeliveryNotice] =
+    useState<string | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const session = storedSession();
+    if (session) {
+      void listSavedRoutes(session.token)
+        .then(setSavedRoutes)
+        .catch((error: unknown) => {
+          if (
+            error instanceof RouteApiError &&
+            error.status === 401
+          ) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+        });
+    }
+    return () => {
       activeRequest.current?.abort();
-    },
-    [],
-  );
+    };
+  }, []);
 
   const updateForm = <Key extends keyof RouteFormState>(
     key: Key,
@@ -315,11 +524,15 @@ export function App() {
     activeRequest.current = controller;
     setSearch({ status: "loading" });
     setSelectedRouteId(null);
+    setSavedByResultRoute({});
+    setDeliveryNotice(null);
     const requestId = `web-${crypto.randomUUID()}`;
+    const request = buildPlanRequest(form, requestId);
+    setLastRequest(request);
 
     try {
       const result = await planRoutes(
-        buildPlanRequest(form, requestId),
+        request,
         controller.signal,
       );
       if (activeRequest.current !== controller) return;
@@ -359,6 +572,124 @@ export function App() {
 
   const routes =
     search.status === "success" ? search.result.routes : [];
+  const selectedRoute =
+    routes.find(({ id }) => id === selectedRouteId) ?? null;
+  const selectedSavedRoute =
+    selectedRoute === null
+      ? null
+      : savedByResultRoute[selectedRoute.id] ?? null;
+
+  const sessionToken = async (): Promise<string> => {
+    const current = storedSession();
+    if (current) return current.token;
+    const created = await createAnonymousSession();
+    rememberSession(created);
+    return created.token;
+  };
+
+  const saveSelectedRoute = async () => {
+    if (!selectedRoute || !lastRequest) return;
+    setDeliveryNotice("正在收藏…");
+    try {
+      const token = await sessionToken();
+      const saved = await saveRoute(token, {
+        name: routeDisplayName(
+          selectedRoute,
+          routes.indexOf(selectedRoute),
+        ),
+        request: lastRequest,
+        route: selectedRoute,
+      });
+      setSavedRoutes((current) => [
+        saved,
+        ...current.filter(({ id }) => id !== saved.id),
+      ]);
+      setSavedByResultRoute((current) => ({
+        ...current,
+        [selectedRoute.id]: saved,
+      }));
+      setDeliveryNotice(
+        saved.hasGeometry
+          ? "路线已收藏，包含可恢复的几何。"
+          : "路线摘要已收藏；Provider policy 禁止长期保存几何。",
+      );
+    } catch (error) {
+      setDeliveryNotice(
+        error instanceof RouteApiError
+          ? `收藏失败：${error.code}`
+          : "收藏失败，请稍后重试。",
+      );
+    }
+  };
+
+  const shareSearch = async () => {
+    const url = createRouteShareUrl(form, window.location.href);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "找路 · 风景路线条件",
+          text: "用这组条件生成风景路线",
+          url,
+        });
+        setDeliveryNotice("搜索条件已分享。");
+      } else {
+        await navigator.clipboard.writeText(url);
+        setDeliveryNotice("搜索条件链接已复制。");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      setDeliveryNotice("暂时无法分享，请复制浏览器地址。");
+    }
+  };
+
+  const removeSavedRoute = async (routeId: string) => {
+    const session = storedSession();
+    if (!session) return;
+    try {
+      await deleteSavedRoute(session.token, routeId);
+      setSavedRoutes((current) =>
+        current.filter(({ id }) => id !== routeId),
+      );
+      setSavedByResultRoute((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([, value]) => value.id !== routeId,
+          ),
+        ),
+      );
+      setDeliveryNotice("收藏已删除。");
+    } catch (error) {
+      setDeliveryNotice(
+        error instanceof RouteApiError
+          ? `删除失败：${error.code}`
+          : "删除失败，请稍后重试。",
+      );
+    }
+  };
+
+  const reportSelectedRoute = async (
+    rating: 1 | 2 | 3 | 4 | 5,
+  ) => {
+    if (!selectedSavedRoute) return;
+    const session = storedSession();
+    if (!session) return;
+    try {
+      await sendFieldReport(
+        session.token,
+        selectedSavedRoute.id,
+        rating,
+      );
+      setDeliveryNotice(`已提交 ${rating} 分现场体验，谢谢。`);
+    } catch (error) {
+      setDeliveryNotice(
+        error instanceof RouteApiError
+          ? `反馈失败：${error.code}`
+          : "反馈失败，请稍后重试。",
+      );
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -379,7 +710,7 @@ export function App() {
         </div>
         <div className="api-badge">
           <span />
-          API v1 已连接
+          API v1 · 收藏 {savedRoutes.length}
         </div>
       </header>
 
@@ -530,7 +861,7 @@ export function App() {
               <span aria-hidden="true">↗</span>
             </button>
             <p className="form-footnote">
-              最多生成 {form.maxResults} 条差异路线 · 不保存搜索记录
+              最多生成 {form.maxResults} 条差异路线 · 收藏遵循 Provider policy
             </p>
           </form>
         </aside>
@@ -548,6 +879,53 @@ export function App() {
             onSelectRoute={setSelectedRouteId}
             selectedRouteId={selectedRouteId}
             state={search}
+          />
+          {selectedRoute ? (
+            <DeliveryPanel
+              mode={form.mode}
+              notice={deliveryNotice}
+              onAdjust={() => {
+                updateForm(
+                  "distanceKilometers",
+                  Math.max(
+                    1,
+                    Math.round(
+                      selectedRoute.distanceMeters / 1_000,
+                    ),
+                  ),
+                );
+                setDeliveryNotice(
+                  "目标距离已更新，可调整偏好后重新生成。",
+                );
+              }}
+              onDownload={(format) => {
+                try {
+                  downloadRoute(selectedRoute, format);
+                  setDeliveryNotice(
+                    `${format.toUpperCase()} 已开始下载。`,
+                  );
+                } catch {
+                  setDeliveryNotice("当前路线不允许这种导出。");
+                }
+              }}
+              onFeedback={(rating) => {
+                void reportSelectedRoute(rating);
+              }}
+              onSave={() => {
+                void saveSelectedRoute();
+              }}
+              onShare={() => {
+                void shareSearch();
+              }}
+              route={selectedRoute}
+              savedRoute={selectedSavedRoute}
+            />
+          ) : null}
+          <SavedRoutesPanel
+            onDelete={(routeId) => {
+              void removeSavedRoute(routeId);
+            }}
+            routes={savedRoutes}
           />
         </aside>
       </main>

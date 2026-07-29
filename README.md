@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-前五个阶段已经完成：
+前六个阶段已经完成：
 
 - 与地图供应商无关的地点、路线、环境特征和评分模型；
 - WGS-84 与 GCJ-02 类型边界；
@@ -24,10 +24,15 @@
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
 - React Web UI、路线条件、结果比较和 GeoJSON 几何预览；
-- 桌面和移动端浏览器验收，以及 64 个自动化测试。
+- 桌面和移动端浏览器验收；
+- GPX、GeoJSON 和高德 URI 路线交付；
+- Provider policy 控制的路线持久化与过期策略；
+- 匿名签名会话、SQLite 收藏和现场反馈；
+- 共享搜索条件和按路线实际距离重新规划；
+- 73 个自动化测试。
 
-服务端 Key 只通过环境变量注入，仓库不包含任何真实 Key。数据库、鉴权、路线
-导出、收藏、分享和生产部署将在后续阶段完成。
+服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
+生产部署、限流、可观测性和生产烟雾测试将在第七阶段完成。
 
 ## 架构边界
 
@@ -49,7 +54,8 @@ findScenicRoutes
 
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
 Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
-[接口文档](docs/SERVER_API.md)。
+[接口文档](docs/SERVER_API.md)，路线交付和数据策略见
+[路线交付文档](docs/ROUTE_DELIVERY.md)。
 
 ## 开发命令
 
@@ -62,5 +68,4 @@ pnpm run build
 
 ## 下一阶段
 
-第六阶段增加 GPX、GeoJSON 和地图 App 交付，以及可控的路线保存、分享和反馈
-能力；第七阶段完成部署配置、Secret、限流、监控、日志脱敏和生产健康检查。
+第七阶段完成部署配置、Secret、限流、监控、日志脱敏和生产健康检查。

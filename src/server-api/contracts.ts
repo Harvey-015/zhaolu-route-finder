@@ -63,6 +63,14 @@ export type ApiRecommendedRoute = Readonly<{
   source: ApiProviderReference;
   scenicFeatures: ScenicFeatures;
   score: RouteScore;
+  delivery: Readonly<{
+    policyId: string;
+    policyVersion: string;
+    exportFormats: readonly ("geojson" | "gpx")[];
+    navigationTargets: readonly "amap"[];
+    persistence: "allowed" | "metadata-only" | "denied";
+    expiresAfterSeconds: number;
+  }>;
 }>;
 
 export type PlanRoutesApiResponse = Readonly<{

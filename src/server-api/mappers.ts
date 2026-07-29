@@ -9,6 +9,10 @@ import type {
   ResolvedPlace,
 } from "../route-recommendation/models.ts";
 import {
+  resolveRouteDeliveryPolicy,
+  type RouteDeliveryPolicyResolver,
+} from "../route-delivery/policy.ts";
+import {
   SERVER_API_SCHEMA_VERSION,
   type ApiPlace,
   type ApiPlaceInput,
@@ -214,6 +218,8 @@ function mapPlace(place: ResolvedPlace): ApiPlace {
 
 export function mapFindScenicRoutesResult(
   result: FindScenicRoutesResult,
+  policyResolver: RouteDeliveryPolicyResolver =
+    resolveRouteDeliveryPolicy,
 ): PlanRoutesApiResponse {
   return {
     schemaVersion: SERVER_API_SCHEMA_VERSION,
@@ -238,6 +244,7 @@ export function mapFindScenicRoutesResult(
         source: route.source,
         scenicFeatures,
         score,
+        delivery: policyResolver(route.source.providerId),
       }),
     ),
     warnings: result.warnings,

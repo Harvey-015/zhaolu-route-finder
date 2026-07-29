@@ -198,6 +198,8 @@ test("exposes stable health and capability discovery endpoints", async () => {
   assert.equal(openApi.status, 200);
   assert.equal(openApiBody.openapi, "3.1.0");
   assert.ok("/api/v1/routes/plan" in openApiBody.paths);
+  assert.ok("/api/v1/session" in openApiBody.paths);
+  assert.ok("/api/v1/saved-routes" in openApiBody.paths);
   assert.equal(planCallCount, 0);
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(
@@ -229,6 +231,10 @@ test("maps a valid API request to core and returns GeoJSON", async () => {
         type: string;
         coordinates: Array<[number, number]>;
       };
+      delivery: {
+        exportFormats: string[];
+        persistence: string;
+      };
     }>;
   };
 
@@ -249,6 +255,8 @@ test("maps a valid API request to core and returns GeoJSON", async () => {
     120.145,
     30.26,
   ]);
+  assert.deepEqual(body.routes[0].delivery.exportFormats, []);
+  assert.equal(body.routes[0].delivery.persistence, "denied");
 });
 
 test("supports query places and generates a request id when absent", async () => {

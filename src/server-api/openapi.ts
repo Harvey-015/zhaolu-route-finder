@@ -118,8 +118,134 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/session": {
+      post: {
+        operationId: "createAnonymousSession",
+        responses: {
+          "201": {
+            description: "Anonymous device session.",
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/SessionResponse",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/saved-routes": {
+      get: {
+        operationId: "listSavedRoutes",
+        security: [{ bearerSession: [] }],
+        responses: {
+          "200": {
+            description: "Unexpired routes saved by this session.",
+          },
+          "401": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+        },
+      },
+      post: {
+        operationId: "saveRoute",
+        security: [{ bearerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                $ref: "#/components/schemas/SaveRouteRequest",
+              },
+            },
+          },
+        },
+        responses: {
+          "201": {
+            description:
+              "Saved route or metadata-only record, according to Provider policy.",
+          },
+          "400": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+          "401": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+          "403": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+        },
+      },
+    },
+    "/api/v1/saved-routes/{routeId}": {
+      delete: {
+        operationId: "deleteSavedRoute",
+        security: [{ bearerSession: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "routeId",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: {
+          "200": { description: "Saved route deleted." },
+          "401": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+          "404": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+        },
+      },
+    },
+    "/api/v1/saved-routes/{routeId}/feedback": {
+      post: {
+        operationId: "createFieldReport",
+        security: [{ bearerSession: [] }],
+        parameters: [
+          {
+            in: "path",
+            name: "routeId",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                $ref: "#/components/schemas/FieldReportRequest",
+              },
+            },
+          },
+        },
+        responses: {
+          "201": { description: "Field report saved." },
+          "400": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+          "401": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+          "404": {
+            $ref: "#/components/responses/ErrorResponse",
+          },
+        },
+      },
+    },
   },
   components: {
+    securitySchemes: {
+      bearerSession: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "zhaolu.v1",
+      },
+    },
     responses: {
       ErrorResponse: {
         description: "Stable error envelope.",
@@ -322,6 +448,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "source",
           "scenicFeatures",
           "score",
+          "delivery",
         ],
         properties: {
           id: { type: "string" },
@@ -355,6 +482,94 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
               "policyVersion",
               "reasons",
             ],
+          },
+          delivery: {
+            type: "object",
+            required: [
+              "policyId",
+              "policyVersion",
+              "exportFormats",
+              "navigationTargets",
+              "persistence",
+              "expiresAfterSeconds",
+            ],
+            properties: {
+              policyId: { type: "string" },
+              policyVersion: { type: "string" },
+              exportFormats: {
+                type: "array",
+                items: { enum: ["geojson", "gpx"] },
+              },
+              navigationTargets: {
+                type: "array",
+                items: { const: "amap" },
+              },
+              persistence: {
+                enum: ["allowed", "metadata-only", "denied"],
+              },
+              expiresAfterSeconds: {
+                type: "integer",
+                minimum: 0,
+              },
+            },
+          },
+        },
+      },
+      SaveRouteRequest: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "schemaVersion",
+          "name",
+          "request",
+          "route",
+        ],
+        properties: {
+          schemaVersion: { const: "1" },
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 100,
+          },
+          request: {
+            $ref: "#/components/schemas/PlanRoutesRequest",
+          },
+          route: {
+            $ref: "#/components/schemas/RecommendedRoute",
+          },
+        },
+      },
+      FieldReportRequest: {
+        type: "object",
+        additionalProperties: false,
+        required: ["schemaVersion", "rating"],
+        properties: {
+          schemaVersion: { const: "1" },
+          rating: {
+            type: "integer",
+            minimum: 1,
+            maximum: 5,
+          },
+          note: {
+            type: "string",
+            minLength: 1,
+            maxLength: 500,
+          },
+        },
+      },
+      SessionResponse: {
+        type: "object",
+        required: ["schemaVersion", "requestId", "session"],
+        properties: {
+          schemaVersion: { const: "1" },
+          requestId: { type: "string" },
+          session: {
+            type: "object",
+            required: ["token", "expiresAt"],
+            properties: {
+              token: { type: "string" },
+              expiresAt: { type: "integer" },
+            },
           },
         },
       },
@@ -419,6 +634,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "limits",
           "scenicFeatures",
           "openApiDocument",
+          "routeDelivery",
         ],
         properties: {
           schemaVersion: { const: "1" },
@@ -432,6 +648,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           limits: { type: "object" },
           scenicFeatures: { type: "object" },
           openApiDocument: { const: "/api/v1/openapi.json" },
+          routeDelivery: { type: "object" },
         },
       },
       ErrorResponse: {

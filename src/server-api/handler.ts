@@ -10,6 +10,11 @@ import {
   SERVER_API_SCHEMA_VERSION,
   type ServerApiErrorResponse,
 } from "./contracts.ts";
+import type { RouteDeliveryPolicyResolver } from "../route-delivery/policy.ts";
+import {
+  UserDataError,
+  UserDataService,
+} from "../user-data/service.ts";
 import {
   mapFindScenicRoutesResult,
   mapPlanRoutesApiRequest,
@@ -32,6 +37,8 @@ export type CreateServerApiOptions = Readonly<{
   planRoutes: PlanScenicRoutes;
   timeoutMs?: number;
   requestIdFactory?: () => string;
+  deliveryPolicyResolver?: RouteDeliveryPolicyResolver;
+  userData?: UserDataService;
 }>;
 
 class ApiTransportError extends Error {
@@ -188,7 +195,7 @@ function healthPayload() {
   } as const;
 }
 
-function capabilitiesPayload() {
+function capabilitiesPayload(userDataAvailable: boolean) {
   return {
     schemaVersion: SERVER_API_SCHEMA_VERSION,
     apiVersion: "v1",
@@ -210,6 +217,15 @@ function capabilitiesPayload() {
       currentlyUnavailable: ["roadComfort"],
     },
     openApiDocument: "/api/v1/openapi.json",
+    routeDelivery: {
+      exportFormats: ["geojson", "gpx"],
+      navigationTargets: ["amap"],
+      savedRoutes: userDataAvailable,
+      fieldReports: userDataAvailable,
+      authentication: userDataAvailable
+        ? "anonymous-bearer-session"
+        : "unavailable",
+    },
   } as const;
 }
 
@@ -303,7 +319,11 @@ export function createServerApi(
           { allow: "GET" },
         );
       }
-      return jsonResponse(capabilitiesPayload(), 200, requestId);
+      return jsonResponse(
+        capabilitiesPayload(options.userData !== undefined),
+        200,
+        requestId,
+      );
     }
 
     if (pathname === "/api/v1/openapi.json") {
@@ -322,6 +342,160 @@ export function createServerApi(
         200,
         requestId,
       );
+    }
+
+    const savedRouteMatch =
+      /^\/api\/v1\/saved-routes\/([0-9a-f-]{36})$/.exec(
+        pathname,
+      );
+    const feedbackMatch =
+      /^\/api\/v1\/saved-routes\/([0-9a-f-]{36})\/feedback$/.exec(
+        pathname,
+      );
+    if (
+      pathname === "/api/v1/session" ||
+      pathname === "/api/v1/saved-routes" ||
+      savedRouteMatch ||
+      feedbackMatch
+    ) {
+      if (!options.userData) {
+        return errorResponse(
+          requestId,
+          503,
+          "USER_DATA_UNAVAILABLE",
+          false,
+        );
+      }
+      try {
+        if (pathname === "/api/v1/session") {
+          if (request.method !== "POST") {
+            return errorResponse(
+              requestId,
+              405,
+              "METHOD_NOT_ALLOWED",
+              false,
+              undefined,
+              { allow: "POST" },
+            );
+          }
+          return jsonResponse(
+            {
+              schemaVersion: SERVER_API_SCHEMA_VERSION,
+              requestId,
+              session: options.userData.issueSession(),
+            },
+            201,
+            requestId,
+          );
+        }
+
+        const userId = options.userData.authenticate(request);
+        if (pathname === "/api/v1/saved-routes") {
+          if (request.method === "GET") {
+            return jsonResponse(
+              {
+                schemaVersion: SERVER_API_SCHEMA_VERSION,
+                requestId,
+                routes: options.userData.listSavedRoutes(userId),
+              },
+              200,
+              requestId,
+            );
+          }
+          if (request.method === "POST") {
+            const body = await readJsonBody(request);
+            return jsonResponse(
+              {
+                schemaVersion: SERVER_API_SCHEMA_VERSION,
+                requestId,
+                route: options.userData.saveRoute(userId, body),
+              },
+              201,
+              requestId,
+            );
+          }
+          return errorResponse(
+            requestId,
+            405,
+            "METHOD_NOT_ALLOWED",
+            false,
+            undefined,
+            { allow: "GET, POST" },
+          );
+        }
+
+        if (savedRouteMatch) {
+          if (request.method !== "DELETE") {
+            return errorResponse(
+              requestId,
+              405,
+              "METHOD_NOT_ALLOWED",
+              false,
+              undefined,
+              { allow: "DELETE" },
+            );
+          }
+          options.userData.deleteSavedRoute(
+            userId,
+            savedRouteMatch[1],
+          );
+          return jsonResponse(
+            {
+              schemaVersion: SERVER_API_SCHEMA_VERSION,
+              requestId,
+              deleted: true,
+            },
+            200,
+            requestId,
+          );
+        }
+
+        if (feedbackMatch) {
+          if (request.method !== "POST") {
+            return errorResponse(
+              requestId,
+              405,
+              "METHOD_NOT_ALLOWED",
+              false,
+              undefined,
+              { allow: "POST" },
+            );
+          }
+          const body = await readJsonBody(request);
+          return jsonResponse(
+            {
+              schemaVersion: SERVER_API_SCHEMA_VERSION,
+              requestId,
+              report: options.userData.addFieldReport(
+                userId,
+                feedbackMatch[1],
+                body,
+              ),
+            },
+            201,
+            requestId,
+          );
+        }
+      } catch (error) {
+        if (error instanceof UserDataError) {
+          return errorResponse(
+            requestId,
+            error.status,
+            error.code,
+            false,
+            error.field ? { field: error.field } : undefined,
+            error.status === 401
+              ? { "www-authenticate": "Bearer" }
+              : undefined,
+          );
+        }
+        return errorResponse(
+          requestId,
+          500,
+          "INTERNAL_ERROR",
+          false,
+        );
+      }
     }
 
     if (pathname !== "/api/v1/routes/plan") {
@@ -354,7 +528,10 @@ export function createServerApi(
         timeoutMs,
       );
       return jsonResponse(
-        mapFindScenicRoutesResult(result),
+        mapFindScenicRoutesResult(
+          result,
+          options.deliveryPolicyResolver,
+        ),
         200,
         requestId,
       );

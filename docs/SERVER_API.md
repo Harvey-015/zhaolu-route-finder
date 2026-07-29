@@ -1,7 +1,8 @@
 # Server API v1
 
-第四阶段提供一个不依赖 Web 框架的 Fetch API Handler，并通过 Node HTTP
-Adapter 在本地运行。核心推荐、地图 Provider 和风景 Provider 不依赖 HTTP。
+Server API 提供一个不依赖 Web 框架的 Fetch API Handler，并通过 Node HTTP
+Adapter 在本地运行。核心推荐、地图 Provider、风景 Provider 和路线交付不依赖
+HTTP。
 
 ## 本地启动
 
@@ -10,6 +11,7 @@ Git：
 
 ```powershell
 $env:AMAP_WEB_SERVICE_KEY = "<server-key>"
+$env:ZHAOLU_SESSION_SECRET = "<至少 32 个字符的随机 Secret>"
 pnpm run start:api
 ```
 
@@ -19,8 +21,10 @@ pnpm run start:api
 http://127.0.0.1:8787
 ```
 
-可以通过 `HOST` 和 `PORT` 修改监听地址。当前阶段没有用户鉴权、数据库和生产
-限流，因此不要直接暴露到公网。
+可以通过 `HOST` 和 `PORT` 修改监听地址，通过
+`ZHAOLU_DATABASE_PATH` 修改 SQLite 文件位置，默认是
+`data/zhaolu.sqlite`。当前匿名设备会话具有鉴权和过期策略，但生产限流要在
+第七阶段完成，因此此时仍不应直接暴露到公网。
 
 ## 接口
 
@@ -29,6 +33,11 @@ GET  /api/v1/health
 GET  /api/v1/capabilities
 GET  /api/v1/openapi.json
 POST /api/v1/routes/plan
+POST /api/v1/session
+GET  /api/v1/saved-routes
+POST /api/v1/saved-routes
+DELETE /api/v1/saved-routes/{routeId}
+POST /api/v1/saved-routes/{routeId}/feedback
 ```
 
 机器可读契约由 `/api/v1/openapi.json` 提供，格式为 OpenAPI 3.1。
@@ -71,6 +80,25 @@ POST /api/v1/routes/plan
 
 响应中的点和路线使用 GeoJSON `Point` 与 `LineString`。内部 Provider 坐标、
 高德原始 DTO 和服务端 Key 不会出现在公共契约中。
+
+每条路线包含 `delivery` policy snapshot，声明允许的导出格式、地图 App
+交接、持久化等级和过期时间。客户端不能自行扩大这些权限。
+
+## 匿名设备会话
+
+`POST /api/v1/session` 创建一个 HMAC-SHA256 签名的短期 Bearer token。收藏、
+删除和反馈接口必须携带：
+
+```text
+Authorization: Bearer zhaolu.v1....
+```
+
+会话默认 30 天过期。Web 将 token 保存在同源浏览器存储中；它只代表匿名设备，
+不是手机号、邮箱或第三方账号登录。SQLite 使用外键隔离每个会话的数据。
+
+高德路线当前 policy 为 `metadata-only`：可以保存名称、距离、得分、请求条件和
+policy snapshot，但不长期保存路线几何。Fixture 路线允许保存完整几何，未知
+Provider 默认拒绝。
 
 ## 稳定错误
 
