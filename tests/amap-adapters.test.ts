@@ -223,7 +223,8 @@ test("splits a running loop into ordered AMap legs and merges WGS-84 output", as
   assert.ok(
     queue.calls.every(
       ({ url }) =>
-        url.searchParams.get("show_fields") === "cost,navi" &&
+        url.searchParams.get("show_fields") ===
+          "cost,navi,polyline" &&
         url.searchParams.get("alternative_route") === "1",
     ),
   );

@@ -99,7 +99,7 @@ export class AmapRouteProvider implements RouteProvider {
           origin: formatGcj02Point(origin),
           destination: formatGcj02Point(destination),
           alternative_route: "1",
-          show_fields: "cost,navi",
+          show_fields: "cost,navi,polyline",
           isindoor: request.mode === "running" ? "0" : undefined,
           output: "JSON",
         },
