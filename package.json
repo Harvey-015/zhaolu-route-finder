@@ -1,0 +1,20 @@
+{
+  "name": "zhaolu-route-finder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Provider-neutral scenic route recommendation core",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
+  }
+}
