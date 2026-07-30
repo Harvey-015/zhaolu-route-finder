@@ -3,12 +3,10 @@ import {
   ROUTE_COLORS,
   routeDisplayName,
 } from "./model.ts";
-
-type RouteMapProps = Readonly<{
-  routes: readonly ApiRecommendedRoute[];
-  selectedRouteId: string | null;
-  onSelectRoute: (routeId: string) => void;
-}>;
+import {
+  defineBasemapRenderer,
+  type BasemapViewportProps,
+} from "./basemap.ts";
 
 type ProjectedPoint = Readonly<{ x: number; y: number }>;
 
@@ -97,7 +95,7 @@ export function RouteMap({
   routes,
   selectedRouteId,
   onSelectRoute,
-}: RouteMapProps) {
+}: BasemapViewportProps) {
   if (routes.length === 0) return <EmptyMap />;
   const projected = projectedRoutes(routes);
   const selected =
@@ -216,3 +214,9 @@ export function RouteMap({
     </div>
   );
 }
+
+export const svgBasemapRenderer = defineBasemapRenderer({
+  id: "svg-preview",
+  displayName: "SVG 路线预览",
+  component: RouteMap,
+});

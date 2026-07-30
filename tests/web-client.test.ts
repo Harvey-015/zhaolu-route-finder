@@ -16,6 +16,10 @@ import {
   routeFormFromSearch,
 } from "../web/src/delivery.ts";
 import {
+  BasemapRendererRegistry,
+  defineBasemapRenderer,
+} from "../web/src/basemap.ts";
+import {
   createAnonymousSession,
   saveRoute,
 } from "../web/src/userDataApi.ts";
@@ -23,6 +27,7 @@ import type {
   PlanRoutesApiRequest,
   PlanRoutesApiResponse,
 } from "../src/server-api/contracts.ts";
+import { RouteDeliveryRegistry } from "../src/route-delivery/registry.ts";
 import { DELIVERY_TEST_ROUTE } from "./fixtures/delivery.ts";
 
 const FORM: RouteFormState = {
@@ -200,6 +205,59 @@ test("routeExport enforces the delivery policy advertised by the API", () => {
         "geojson",
       ),
     /ROUTE_EXPORT_NOT_ALLOWED/,
+  );
+});
+
+test("routeExport resolves formats through an injected registry", () => {
+  const registry = new RouteDeliveryRegistry({
+    exporters: [
+      {
+        format: "kml",
+        label: "下载 KML",
+        exportRoute: (route) => ({
+          contentType:
+            "application/vnd.google-earth.kml+xml; charset=utf-8",
+          extension: "kml",
+          body: `<kml>${route.id}</kml>`,
+        }),
+      },
+    ],
+  });
+  const route = {
+    ...DELIVERY_TEST_ROUTE,
+    delivery: {
+      ...DELIVERY_TEST_ROUTE.delivery,
+      exportFormats: ["kml"],
+    },
+  };
+
+  assert.equal(
+    routeExport(route, "kml", registry).body,
+    "<kml>route-delivery-1</kml>",
+  );
+  assert.throws(
+    () => routeExport(route, "gpx", registry),
+    /ROUTE_EXPORT_NOT_ALLOWED/,
+  );
+});
+
+test("basemap renderers can be registered and selected by id", () => {
+  const renderer = defineBasemapRenderer({
+    id: "example-map",
+    displayName: "Example map",
+    component: () => null,
+  });
+  const registry = new BasemapRendererRegistry([renderer]);
+
+  assert.deepEqual(registry.require("example-map"), renderer);
+  assert.deepEqual(registry.ids(), ["example-map"]);
+  assert.throws(
+    () => registry.require("missing"),
+    /BASEMAP_RENDERER_NOT_REGISTERED/,
+  );
+  assert.throws(
+    () => new BasemapRendererRegistry([renderer, renderer]),
+    /BASEMAP_RENDERER_DUPLICATE/,
   );
 });
 

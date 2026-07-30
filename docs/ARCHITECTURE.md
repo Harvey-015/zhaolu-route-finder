@@ -235,21 +235,42 @@ interface RoutingProvider {
 ### 5.3 地图展示 Renderer
 
 ```ts
-interface BasemapRenderer {
-  mount(
-    container: HTMLElement,
-    options: MapOptions,
-  ): Promise<MapController>;
-}
+type BasemapViewportProps = {
+  routes: readonly ApiRecommendedRoute[];
+  selectedRouteId: string | null;
+  onSelectRoute(routeId: string): void;
+};
+
+type BasemapRenderer = {
+  id: string;
+  displayName: string;
+  component: ComponentType<BasemapViewportProps>;
+};
 ```
 
-实现可以是：
+Web 组合根把 Renderer 注入 `App`。当前默认实现是
+`svgBasemapRenderer`；新增实现使用 `defineBasemapRenderer` 声明，并可通过
+`BasemapRendererRegistry` 按 ID 选择：
+
+```tsx
+const amapBasemapRenderer = defineBasemapRenderer({
+  id: "amap",
+  displayName: "高德地图",
+  component: AmapRouteMap,
+});
+
+root.render(<App basemapRenderer={amapBasemapRenderer} />);
+```
+
+其他实现可以是：
 
 - `AmapBasemapRenderer`
 - `GoogleBasemapRenderer`
 - `MapLibreBasemapRenderer`
 
-地图组件只接收标准路线和覆盖物。路线计算不能放进地图组件。
+地图组件只接收标准 API 路线和选择回调。SDK 生命周期、Web Key、覆盖物和坐标
+显示转换属于具体 Renderer；路线计算、服务端 Secret 和 Provider 调用不能放进
+地图组件。
 
 ### 5.4 地点与地理编码
 
@@ -385,21 +406,34 @@ type RouteSelectionStrategy = (
 
 ```ts
 interface RouteExporter {
-  export(route: ScenicRoute): Promise<ExportResult>;
+  readonly format: string;
+  readonly label: string;
+  exportRoute(route: ApiRecommendedRoute): RouteExport;
 }
 
 interface NavigationLinkProvider {
-  createLink(route: ScenicRoute, context: NavigationContext): Promise<string>;
+  readonly target: string;
+  readonly label: string;
+  createLink(
+    route: ApiRecommendedRoute,
+    context: NavigationLinkContext,
+  ): string;
 }
 ```
 
-实现包括：
+`RouteDeliveryRegistry` 在 Web 组合根注册实现。页面根据每条路线的 policy
+snapshot 与本地注册表的交集生成操作，不再写死格式或地图厂商分支。默认实现
+包括：
 
-- `GpxExporter`
-- `GeoJsonExporter`
-- `AmapNavigationLinkProvider`
-- `GoogleNavigationLinkProvider`
-- 系统分享
+- `gpxRouteExporter`
+- `geoJsonRouteExporter`
+- `amapNavigationLinkProvider`
+
+新增 KML 或其他地图交接时，开发者需要同时：
+
+1. 实现并注册对应端口；
+2. 在 Provider policy 中显式允许该 format/target；
+3. 在 Server API 的 `deliveryCapabilities` 中声明已安装能力。
 
 完整自定义轨迹以找路手机页和 GPX 为准。地图 App 调起属于 Provider 能力，不应修改核心路线。
 

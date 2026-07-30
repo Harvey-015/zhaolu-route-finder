@@ -66,8 +66,8 @@ export type ApiRecommendedRoute = Readonly<{
   delivery: Readonly<{
     policyId: string;
     policyVersion: string;
-    exportFormats: readonly ("geojson" | "gpx")[];
-    navigationTargets: readonly "amap"[];
+    exportFormats: readonly string[];
+    navigationTargets: readonly string[];
     persistence: "allowed" | "metadata-only" | "denied";
     expiresAfterSeconds: number;
   }>;

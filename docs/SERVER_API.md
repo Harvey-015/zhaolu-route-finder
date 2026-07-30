@@ -85,6 +85,11 @@ POST /api/v1/saved-routes/{routeId}/feedback
 每条路线包含 `delivery` policy snapshot，声明允许的导出格式、地图 App
 交接、持久化等级和过期时间。客户端不能自行扩大这些权限。
 
+导出格式和导航目标是开放字符串标识，不再由 v1 契约固定枚举。组合根通过
+`createServerApi({ deliveryCapabilities })` 声明当前部署实际安装的
+`RouteExporter` 与 `NavigationLinkProvider`；客户端应取“capabilities、路线
+policy 和本地注册表”的交集。
+
 ## 匿名设备会话
 
 `POST /api/v1/session` 创建一个 HMAC-SHA256 签名的短期 Bearer token。收藏、

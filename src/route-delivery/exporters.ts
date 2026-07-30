@@ -1,10 +1,13 @@
 import type { ApiRecommendedRoute } from "../server-api/contracts.ts";
+import type {
+  RouteExport,
+  RouteExporter,
+} from "./ports.ts";
 
-export type RouteExport = Readonly<{
-  contentType: string;
-  extension: "geojson" | "gpx";
-  body: string;
-}>;
+export type { RouteExport, RouteExporter } from "./ports.ts";
+
+export type TextRouteExport = Omit<RouteExport, "body"> &
+  Readonly<{ body: string }>;
 
 function xmlEscape(value: string): string {
   return value
@@ -21,7 +24,7 @@ function routeName(route: ApiRecommendedRoute): string {
 
 export function exportRouteGeoJson(
   route: ApiRecommendedRoute,
-): RouteExport {
+): TextRouteExport {
   return {
     contentType: "application/geo+json; charset=utf-8",
     extension: "geojson",
@@ -46,7 +49,7 @@ export function exportRouteGeoJson(
 
 export function exportRouteGpx(
   route: ApiRecommendedRoute,
-): RouteExport {
+): TextRouteExport {
   const trackPoints = route.geometry.coordinates
     .map(
       ([longitude, latitude]) =>
@@ -78,3 +81,20 @@ export function exportRouteGpx(
     body,
   };
 }
+
+export const geoJsonRouteExporter: RouteExporter = Object.freeze({
+  format: "geojson",
+  label: "下载 GeoJSON",
+  exportRoute: exportRouteGeoJson,
+});
+
+export const gpxRouteExporter: RouteExporter = Object.freeze({
+  format: "gpx",
+  label: "下载 GPX",
+  exportRoute: exportRouteGpx,
+});
+
+export const builtInRouteExporters = Object.freeze([
+  geoJsonRouteExporter,
+  gpxRouteExporter,
+] as const);

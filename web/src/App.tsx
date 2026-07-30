@@ -9,14 +9,17 @@ import type {
   PlanRoutesApiRequest,
   PlanRoutesApiResponse,
 } from "../../src/server-api/contracts.ts";
+import type { RouteDeliveryRegistry } from "../../src/route-delivery/registry.ts";
 import type { SavedRouteSummary } from "../../src/user-data/models.ts";
 import { planRoutes, RouteApiError } from "./api.ts";
 import {
-  amapHandoffUrl,
   createRouteShareUrl,
+  defaultRouteDeliveryRegistry,
   downloadRoute,
+  navigationHandoffUrl,
   routeFormFromSearch,
 } from "./delivery.ts";
+import type { BasemapRenderer } from "./basemap.ts";
 import {
   buildPlanRequest,
   formatDistance,
@@ -26,7 +29,7 @@ import {
   routeDisplayName,
   type RouteFormState,
 } from "./model.ts";
-import { RouteMap } from "./RouteMap.tsx";
+import { svgBasemapRenderer } from "./RouteMap.tsx";
 import {
   createAnonymousSession,
   deleteSavedRoute,
@@ -333,6 +336,7 @@ function ResultsPanel({
 function DeliveryPanel({
   route,
   mode,
+  deliveryRegistry,
   savedRoute,
   notice,
   onDownload,
@@ -343,16 +347,22 @@ function DeliveryPanel({
 }: Readonly<{
   route: ApiRecommendedRoute;
   mode: RouteFormState["mode"];
+  deliveryRegistry: RouteDeliveryRegistry;
   savedRoute: SavedRouteSummary | null;
   notice: string | null;
-  onDownload: (format: "geojson" | "gpx") => void;
+  onDownload: (format: string) => void;
   onSave: () => void;
   onShare: () => void;
   onAdjust: () => void;
   onFeedback: (rating: 1 | 2 | 3 | 4 | 5) => void;
 }>) {
-  const amapAllowed =
-    route.delivery.navigationTargets.includes("amap");
+  const exporters = deliveryRegistry.exporters(
+    route.delivery.exportFormats,
+  );
+  const navigationProviders =
+    deliveryRegistry.navigationLinkProviders(
+      route.delivery.navigationTargets,
+    );
   return (
     <section className="delivery-panel" aria-label="路线交付">
       <div className="delivery-heading">
@@ -363,28 +373,30 @@ function DeliveryPanel({
         <span>{route.delivery.policyId}</span>
       </div>
       <div className="delivery-actions">
-        {route.delivery.exportFormats.includes("gpx") ? (
-          <button onClick={() => onDownload("gpx")} type="button">
-            下载 GPX
-          </button>
-        ) : null}
-        {route.delivery.exportFormats.includes("geojson") ? (
+        {exporters.map((exporter) => (
           <button
-            onClick={() => onDownload("geojson")}
+            key={exporter.format}
+            onClick={() => onDownload(exporter.format)}
             type="button"
           >
-            下载 GeoJSON
+            {exporter.label}
           </button>
-        ) : null}
-        {amapAllowed ? (
+        ))}
+        {navigationProviders.map((provider) => (
           <a
-            href={amapHandoffUrl(route, mode)}
+            href={navigationHandoffUrl(
+              route,
+              provider.target,
+              mode,
+              deliveryRegistry,
+            )}
+            key={provider.target}
             rel="noreferrer"
             target="_blank"
           >
-            高德到路线中点
+            {provider.label}
           </a>
-        ) : null}
+        ))}
         <button onClick={onShare} type="button">
           分享搜索条件
         </button>
@@ -403,7 +415,7 @@ function DeliveryPanel({
         </button>
       </div>
       <p className="delivery-note">
-        高德只能接收到起点和路线中点；完整自定义环线请使用 GPX。
+        地图 App 交接范围由已注册 Provider 决定；完整自定义环线请优先使用轨迹导出。
         {route.delivery.persistence === "metadata-only"
           ? " 当前 Provider 只长期保存路线摘要，不保存几何。"
           : ""}
@@ -469,7 +481,15 @@ function SavedRoutesPanel({
   );
 }
 
-export function App() {
+export type AppProps = Readonly<{
+  basemapRenderer?: BasemapRenderer;
+  deliveryRegistry?: RouteDeliveryRegistry;
+}>;
+
+export function App({
+  basemapRenderer = svgBasemapRenderer,
+  deliveryRegistry = defaultRouteDeliveryRegistry,
+}: AppProps = {}) {
   const [form, setForm] = useState<RouteFormState>(() =>
     routeFormFromSearch(window.location.search),
   );
@@ -578,6 +598,7 @@ export function App() {
     selectedRoute === null
       ? null
       : savedByResultRoute[selectedRoute.id] ?? null;
+  const BasemapComponent = basemapRenderer.component;
 
   const sessionToken = async (): Promise<string> => {
     const current = storedSession();
@@ -867,7 +888,7 @@ export function App() {
         </aside>
 
         <section className="map-panel">
-          <RouteMap
+          <BasemapComponent
             onSelectRoute={setSelectedRouteId}
             routes={routes}
             selectedRouteId={selectedRouteId}
@@ -882,6 +903,7 @@ export function App() {
           />
           {selectedRoute ? (
             <DeliveryPanel
+              deliveryRegistry={deliveryRegistry}
               mode={form.mode}
               notice={deliveryNotice}
               onAdjust={() => {
@@ -900,7 +922,11 @@ export function App() {
               }}
               onDownload={(format) => {
                 try {
-                  downloadRoute(selectedRoute, format);
+                  downloadRoute(
+                    selectedRoute,
+                    format,
+                    deliveryRegistry,
+                  );
                   setDeliveryNotice(
                     `${format.toUpperCase()} 已开始下载。`,
                   );

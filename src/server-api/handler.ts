@@ -11,6 +11,7 @@ import {
   type ServerApiErrorResponse,
 } from "./contracts.ts";
 import type { RouteDeliveryPolicyResolver } from "../route-delivery/policy.ts";
+import type { RouteDeliveryCapabilities } from "../route-delivery/ports.ts";
 import type {
   ApiRateLimiter,
   ApiRateLimitScope,
@@ -27,6 +28,11 @@ import { SERVER_API_OPENAPI_DOCUMENT } from "./openapi.ts";
 
 export const MAX_SERVER_API_BODY_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_ROUTE_DELIVERY_CAPABILITIES: RouteDeliveryCapabilities =
+  Object.freeze({
+    exportFormats: Object.freeze(["geojson", "gpx"]),
+    navigationTargets: Object.freeze(["amap"]),
+  });
 
 export type PlanScenicRoutes = (
   request: FindScenicRoutesRequest,
@@ -42,6 +48,7 @@ export type CreateServerApiOptions = Readonly<{
   timeoutMs?: number;
   requestIdFactory?: () => string;
   deliveryPolicyResolver?: RouteDeliveryPolicyResolver;
+  deliveryCapabilities?: RouteDeliveryCapabilities;
   userData?: UserDataService;
   rateLimiter?: ApiRateLimiter;
   readinessCheck?: () => Promise<
@@ -218,7 +225,10 @@ function rateLimitScope(
   return null;
 }
 
-function capabilitiesPayload(userDataAvailable: boolean) {
+function capabilitiesPayload(
+  userDataAvailable: boolean,
+  deliveryCapabilities: RouteDeliveryCapabilities,
+) {
   return {
     schemaVersion: SERVER_API_SCHEMA_VERSION,
     apiVersion: "v1",
@@ -241,8 +251,8 @@ function capabilitiesPayload(userDataAvailable: boolean) {
     },
     openApiDocument: "/api/v1/openapi.json",
     routeDelivery: {
-      exportFormats: ["geojson", "gpx"],
-      navigationTargets: ["amap"],
+      exportFormats: deliveryCapabilities.exportFormats,
+      navigationTargets: deliveryCapabilities.navigationTargets,
       savedRoutes: userDataAvailable,
       fieldReports: userDataAvailable,
       authentication: userDataAvailable
@@ -397,7 +407,11 @@ export function createServerApi(
         );
       }
       return jsonResponse(
-        capabilitiesPayload(options.userData !== undefined),
+        capabilitiesPayload(
+          options.userData !== undefined,
+          options.deliveryCapabilities ??
+            DEFAULT_ROUTE_DELIVERY_CAPABILITIES,
+        ),
         200,
         requestId,
       );

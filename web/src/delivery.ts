@@ -1,14 +1,20 @@
-import { createAmapNavigationLink } from "../../src/adapters/amap/navigationLinkProvider.ts";
+import { amapNavigationLinkProvider } from "../../src/adapters/amap/navigationLinkProvider.ts";
 import {
-  exportRouteGeoJson,
-  exportRouteGpx,
+  builtInRouteExporters,
   type RouteExport,
 } from "../../src/route-delivery/exporters.ts";
+import { RouteDeliveryRegistry } from "../../src/route-delivery/registry.ts";
 import type { ApiRecommendedRoute } from "../../src/server-api/contracts.ts";
 import {
   INITIAL_ROUTE_FORM,
   type RouteFormState,
 } from "./model.ts";
+
+export const defaultRouteDeliveryRegistry =
+  new RouteDeliveryRegistry({
+    exporters: builtInRouteExporters,
+    navigationLinkProviders: [amapNavigationLinkProvider],
+  });
 
 function boundedNumber(
   value: string | null,
@@ -83,21 +89,27 @@ export function createRouteShareUrl(
 
 export function routeExport(
   route: ApiRecommendedRoute,
-  format: "geojson" | "gpx",
+  format: string,
+  registry: RouteDeliveryRegistry =
+    defaultRouteDeliveryRegistry,
 ): RouteExport {
   if (!route.delivery.exportFormats.includes(format)) {
     throw new Error("ROUTE_EXPORT_NOT_ALLOWED");
   }
-  return format === "geojson"
-    ? exportRouteGeoJson(route)
-    : exportRouteGpx(route);
+  const exporter = registry.exporter(format);
+  if (!exporter) {
+    throw new Error("ROUTE_EXPORTER_NOT_REGISTERED");
+  }
+  return exporter.exportRoute(route);
 }
 
 export function downloadRoute(
   route: ApiRecommendedRoute,
-  format: "geojson" | "gpx",
+  format: string,
+  registry: RouteDeliveryRegistry =
+    defaultRouteDeliveryRegistry,
 ): void {
-  const exported = routeExport(route, format);
+  const exported = routeExport(route, format, registry);
   const objectUrl = URL.createObjectURL(
     new Blob([exported.body], {
       type: exported.contentType,
@@ -116,9 +128,25 @@ export function downloadRoute(
 export function amapHandoffUrl(
   route: ApiRecommendedRoute,
   mode: RouteFormState["mode"],
+  registry: RouteDeliveryRegistry =
+    defaultRouteDeliveryRegistry,
 ): string {
-  if (!route.delivery.navigationTargets.includes("amap")) {
-    throw new Error("AMAP_HANDOFF_NOT_ALLOWED");
+  return navigationHandoffUrl(route, "amap", mode, registry);
+}
+
+export function navigationHandoffUrl(
+  route: ApiRecommendedRoute,
+  target: string,
+  mode: RouteFormState["mode"],
+  registry: RouteDeliveryRegistry =
+    defaultRouteDeliveryRegistry,
+): string {
+  if (!route.delivery.navigationTargets.includes(target)) {
+    throw new Error("NAVIGATION_HANDOFF_NOT_ALLOWED");
   }
-  return createAmapNavigationLink(route, mode);
+  const provider = registry.navigationLinkProvider(target);
+  if (!provider) {
+    throw new Error("NAVIGATION_PROVIDER_NOT_REGISTERED");
+  }
+  return provider.createLink(route, { mode });
 }

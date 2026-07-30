@@ -23,9 +23,10 @@
 - 高德离线契约测试和受控在线冒烟；
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
-- React Web UI、路线条件、结果比较和 GeoJSON 几何预览；
+- React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
 - 桌面和移动端浏览器验收；
-- GPX、GeoJSON 和高德 URI 路线交付；
+- 注册式 `RouteExporter`、`NavigationLinkProvider`，以及默认
+  GPX、GeoJSON 和高德 URI 路线交付；
 - Provider policy 控制的路线持久化与过期策略；
 - 匿名签名会话、SQLite 收藏和现场反馈；
 - 共享搜索条件和按路线实际距离重新规划；

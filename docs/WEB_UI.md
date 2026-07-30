@@ -41,9 +41,28 @@ pnpm run dev:web
 - 对收藏路线提交 1–5 分现场体验；
 - 采用路线实际距离调整条件后重新规划。
 
-几何预览不是地理底图。接入高德 JS 底图需要独立 Web Key 和安全配置，不能
-复用服务端 Web Service Key；在完成该配置前，界面明确标注“底图待 Web Key
-接入”。
+默认 `svgBasemapRenderer` 只是几何预览，不是地理底图。Web 已通过
+`BasemapRenderer` 接口接收地图实现；接入高德、MapLibre、Google Maps 或
+Leaflet 时，只需实现 `BasemapViewportProps` 对应组件，然后注入 `App`：
+
+```tsx
+const renderer = defineBasemapRenderer({
+  id: "maplibre",
+  displayName: "MapLibre",
+  component: MapLibreRouteMap,
+});
+
+createRoot(root).render(<App basemapRenderer={renderer} />);
+```
+
+Renderer 只接收标准 `ApiRecommendedRoute`、当前路线 ID 和选择回调。地图 SDK
+生命周期、覆盖物与显示坐标转换留在 Renderer 内部；路线规划和服务端 Secret
+不得进入 Renderer。高德 JS 底图需要独立 Web Key，不能复用服务端 Web
+Service Key。
+
+路线导出和地图 App 交接同样由 `RouteDeliveryRegistry` 注入。页面会自动显示
+“路线 policy 允许且当前注册表已安装”的操作，新增格式或导航 Provider 不需要
+修改 `App.tsx` 条件分支。
 
 ## 验证
 

@@ -216,6 +216,35 @@ test("exposes stable health and capability discovery endpoints", async () => {
   );
 });
 
+test("advertises the delivery extensions installed by the composition root", async () => {
+  const handler = createServerApi({
+    planRoutes: async (request) => coreResult(request),
+    deliveryCapabilities: {
+      exportFormats: ["geojson", "kml"],
+      navigationTargets: ["example-maps"],
+    },
+  });
+
+  const response = await handler(
+    new Request("http://localhost/api/v1/capabilities"),
+  );
+  const body = (await response.json()) as {
+    routeDelivery: {
+      exportFormats: string[];
+      navigationTargets: string[];
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.routeDelivery.exportFormats, [
+    "geojson",
+    "kml",
+  ]);
+  assert.deepEqual(body.routeDelivery.navigationTargets, [
+    "example-maps",
+  ]);
+});
+
 test("maps a valid API request to core and returns GeoJSON", async () => {
   let received: FindScenicRoutesRequest | undefined;
   let receivedSignal: AbortSignal | undefined;

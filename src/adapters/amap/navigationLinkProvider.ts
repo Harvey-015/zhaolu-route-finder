@@ -1,5 +1,6 @@
 import type { TravelMode } from "../../route-recommendation/models.ts";
 import type { ApiRecommendedRoute } from "../../server-api/contracts.ts";
+import type { NavigationLinkProvider } from "../../route-delivery/ports.ts";
 import { wgs84Point } from "../../route-recommendation/coordinates.ts";
 import { wgs84ToGcj02 } from "./coordinates.ts";
 
@@ -38,3 +39,11 @@ export function createAmapNavigationLink(
   url.searchParams.set("callnative", "1");
   return url.toString();
 }
+
+export const amapNavigationLinkProvider: NavigationLinkProvider =
+  Object.freeze({
+    target: "amap",
+    label: "高德到路线中点",
+    createLink: (route, context) =>
+      createAmapNavigationLink(route, context.mode),
+  } satisfies NavigationLinkProvider);

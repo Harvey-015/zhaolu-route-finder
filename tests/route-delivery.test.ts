@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAmapNavigationLink } from "../src/adapters/amap/navigationLinkProvider.ts";
 import {
+  amapNavigationLinkProvider,
+  createAmapNavigationLink,
+} from "../src/adapters/amap/navigationLinkProvider.ts";
+import {
+  builtInRouteExporters,
   exportRouteGeoJson,
   exportRouteGpx,
 } from "../src/route-delivery/exporters.ts";
+import { RouteDeliveryRegistry } from "../src/route-delivery/registry.ts";
 import {
   resolveFixtureRouteDeliveryPolicy,
   resolveRouteDeliveryPolicy,
@@ -81,5 +86,74 @@ test("uses explicit Provider policy and denies unknown sources", () => {
   assert.equal(
     resolveRouteDeliveryPolicy("unknown-provider").persistence,
     "denied",
+  );
+});
+
+test("registers custom exporters and navigation providers without changing delivery core", () => {
+  const registry = new RouteDeliveryRegistry({
+    exporters: [
+      ...builtInRouteExporters,
+      {
+        format: "kml",
+        label: "下载 KML",
+        exportRoute: (route) => ({
+          contentType:
+            "application/vnd.google-earth.kml+xml; charset=utf-8",
+          extension: "kml",
+          body: `<kml data-route="${route.id}"></kml>`,
+        }),
+      },
+    ],
+    navigationLinkProviders: [
+      amapNavigationLinkProvider,
+      {
+        target: "example-maps",
+        label: "示例地图",
+        createLink: (route, context) =>
+          `https://maps.example/route/${route.id}?mode=${context.mode}`,
+      },
+    ],
+  });
+
+  assert.deepEqual(registry.capabilities(), {
+    exportFormats: ["geojson", "gpx", "kml"],
+    navigationTargets: ["amap", "example-maps"],
+  });
+  assert.equal(
+    registry.exporter("kml")?.exportRoute(DELIVERY_TEST_ROUTE)
+      .extension,
+    "kml",
+  );
+  assert.equal(
+    registry
+      .navigationLinkProvider("example-maps")
+      ?.createLink(DELIVERY_TEST_ROUTE, { mode: "running" }),
+    "https://maps.example/route/route-delivery-1?mode=running",
+  );
+});
+
+test("rejects invalid or duplicate route delivery registrations", () => {
+  assert.throws(
+    () =>
+      new RouteDeliveryRegistry({
+        exporters: [
+          builtInRouteExporters[0],
+          builtInRouteExporters[0],
+        ],
+      }),
+    /ROUTE_EXPORTER_DUPLICATE/,
+  );
+  assert.throws(
+    () =>
+      new RouteDeliveryRegistry({
+        navigationLinkProviders: [
+          {
+            target: "Invalid Target",
+            label: "Invalid",
+            createLink: () => "https://example.com",
+          },
+        ],
+      }),
+    /NAVIGATION_PROVIDER_TARGET_INVALID/,
   );
 });

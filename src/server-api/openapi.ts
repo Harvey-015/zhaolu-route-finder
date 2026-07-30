@@ -512,11 +512,17 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
               policyVersion: { type: "string" },
               exportFormats: {
                 type: "array",
-                items: { enum: ["geojson", "gpx"] },
+                items: {
+                  type: "string",
+                  pattern: "^[a-z0-9][a-z0-9._-]*$",
+                },
               },
               navigationTargets: {
                 type: "array",
-                items: { const: "amap" },
+                items: {
+                  type: "string",
+                  pattern: "^[a-z0-9][a-z0-9._-]*$",
+                },
               },
               persistence: {
                 enum: ["allowed", "metadata-only", "denied"],

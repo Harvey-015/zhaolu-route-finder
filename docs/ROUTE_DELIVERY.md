@@ -13,6 +13,35 @@
 高德 URI 的步行和骑行模式不能携带完整自定义环线，因此页面只交接起点到路线
 中点，并明确提示完整路线使用 GPX。它不会声称高德能复现找路路线。
 
+## 扩展注册
+
+路线交付有两个稳定端口：
+
+```ts
+interface RouteExporter {
+  readonly format: string;
+  readonly label: string;
+  exportRoute(route: ApiRecommendedRoute): RouteExport;
+}
+
+interface NavigationLinkProvider {
+  readonly target: string;
+  readonly label: string;
+  createLink(
+    route: ApiRecommendedRoute,
+    context: NavigationLinkContext,
+  ): string;
+}
+```
+
+默认 `RouteDeliveryRegistry` 注册 GeoJSON、GPX 和高德交接。新增 KML、FIT 或
+其他地图 Provider 时，把实现加入组合根的注册表即可；`App` 会按 label 自动
+生成按钮或链接，不需要新增厂商条件分支。
+
+注册实现不等于自动获得权限。相应 Provider policy 必须显式允许 format/target，
+Server API 的 `deliveryCapabilities` 也必须声明当前部署确实安装了该能力。
+未知、未安装或 policy 未允许的能力全部拒绝。
+
 ## Provider policy
 
 每条 API 路线携带：

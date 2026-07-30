@@ -1,5 +1,5 @@
-export type RouteExportFormat = "geojson" | "gpx";
-export type NavigationTarget = "amap";
+export type RouteExportFormat = string;
+export type NavigationTarget = string;
 
 export type RouteDeliveryPolicy = Readonly<{
   policyId: string;
