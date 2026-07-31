@@ -1,5 +1,7 @@
 node_modules/
 dist/
+web-dist/
+data/
 *.tsbuildinfo
 
 .env

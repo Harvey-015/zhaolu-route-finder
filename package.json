@@ -9,12 +9,34 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "build": "pnpm run build:core && pnpm run build:web",
+    "build:core": "tsc -p tsconfig.build.json",
+    "build:web": "vite build --config vite.config.ts",
+    "dev:api:fixture": "node --experimental-strip-types scripts/start-fixture-api.ts",
+    "dev:web": "vite --config vite.config.ts",
+    "preview:web": "vite preview --config vite.config.ts",
+    "smoke:api": "node --experimental-strip-types scripts/smoke-server-api.ts",
+    "smoke:amap": "node --experimental-strip-types scripts/smoke-amap.ts",
+    "smoke:production": "node --experimental-strip-types scripts/smoke-production.ts",
+    "smoke:worldcover": "node --experimental-strip-types scripts/smoke-worldcover.ts",
+    "start:api": "node --experimental-strip-types scripts/start-api.ts",
+    "start:production": "node --disable-warning=ExperimentalWarning dist/runtime/main.js",
+    "test": "pnpm run build && node --test tests/route-recommendation-core.test.ts tests/scoring.test.ts tests/amap-adapters.test.ts tests/amap-smoke.test.ts tests/worldcover-adapter.test.ts tests/worldcover-smoke.test.ts tests/server-api.test.ts tests/server-api-smoke.test.ts tests/web-client.test.ts tests/route-delivery.test.ts tests/user-data.test.ts tests/runtime-operations.test.ts",
+    "typecheck": "pnpm run typecheck:core && pnpm run typecheck:web",
+    "typecheck:core": "tsc -p tsconfig.json",
+    "typecheck:web": "tsc -p tsconfig.web.json"
   },
   "devDependencies": {
     "@types/node": "22.19.19",
-    "typescript": "5.9.3"
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.4",
+    "typescript": "5.9.3",
+    "vite": "8.1.5"
+  },
+  "dependencies": {
+    "geotiff": "3.0.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   }
 }

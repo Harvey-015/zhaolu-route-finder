@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-第一阶段核心架构已经完成：
+七个阶段的仓库实现已经完成：
 
 - 与地图供应商无关的地点、路线、环境特征和评分模型；
 - WGS-84 与 GCJ-02 类型边界；
@@ -15,8 +15,27 @@
 - 可替换的候选生成与路线选择纯策略；
 - Fake Provider 和完全离线的核心测试；
 - 调用预算、并发、取消、降级和稳定错误契约。
+- 高德地点解析与步行、骑行路线 Adapter；
+- 高德 DTO、运行时校验和内部模型 Mapper；
+- 集中的 GCJ-02/WGS-84 转换；
+- 集中的超时、有限重试、取消、额度和错误转换；
+- 途经点路段拆分、调用上限和路线合并；
+- 高德离线契约测试和受控在线冒烟；
+- ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
+- 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
+- React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
+- 桌面和移动端浏览器验收；
+- 注册式 `RouteExporter`、`NavigationLinkProvider`，以及默认
+  GPX、GeoJSON 和高德 URI 路线交付；
+- Provider policy 控制的路线持久化与过期策略；
+- 匿名签名会话、SQLite 收藏和现场反馈；
+- 共享搜索条件和按路线实际距离重新规划；
+- 单进程生产运行时、Docker/Compose 和 GitHub Actions；
+- 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
+- 78 个自动化测试。
 
-当前仓库不包含旧原型页面、真实高德接入、WorldCover 接入、Worker API、数据库或部署配置。
+服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
+实际生产发布仍需要外部容器平台、域名、TLS、Secret 注入和持久数据卷。
 
 ## 架构边界
 
@@ -34,7 +53,13 @@ findScenicRoutes
 
 核心代码只依赖内部 TypeScript 模型，不依赖 React、Next.js、Cloudflare、数据库或第三方地图 SDK。
 
+高德基础设施代码位于 `src/adapters/amap`，只实现 `PlaceProvider` 和 `RouteProvider`，不会反向进入路线核心。
+
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
+Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
+[接口文档](docs/SERVER_API.md)，路线交付和数据策略见
+[路线交付文档](docs/ROUTE_DELIVERY.md)，生产运行见
+[部署文档](docs/DEPLOYMENT.md)。
 
 ## 开发命令
 
@@ -47,4 +72,5 @@ pnpm run build
 
 ## 下一阶段
 
-下一阶段只增加高德地点和路线 Adapter、第三方 DTO Mapper 及契约测试，不修改核心算法和前端页面。
+选择生产容器平台并配置域名、TLS、Secret 与 SQLite 持久卷；发布后运行只读
+生产烟雾。需要多实例时，再把限流迁移到 Redis、数据层迁移到 PostgreSQL。

@@ -17,9 +17,9 @@
 
 ### 1.1 当前实现范围
 
-当前仓库是正式版本的第一阶段核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
+当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-高德、WorldCover、Worker API、React 展示层、数据库、收藏、分享和部署均不在当前阶段。
+第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、SQLite、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成统一生产运行时、容器定义、CI、Secret 校验、限流、就绪探针、受保护指标、脱敏日志、优雅关闭和只读生产烟雾。实际生产发布仍取决于外部部署平台、域名、TLS、Secret 和数据卷。
 
 ## 2. 架构原则
 
@@ -235,21 +235,42 @@ interface RoutingProvider {
 ### 5.3 地图展示 Renderer
 
 ```ts
-interface BasemapRenderer {
-  mount(
-    container: HTMLElement,
-    options: MapOptions,
-  ): Promise<MapController>;
-}
+type BasemapViewportProps = {
+  routes: readonly ApiRecommendedRoute[];
+  selectedRouteId: string | null;
+  onSelectRoute(routeId: string): void;
+};
+
+type BasemapRenderer = {
+  id: string;
+  displayName: string;
+  component: ComponentType<BasemapViewportProps>;
+};
 ```
 
-实现可以是：
+Web 组合根把 Renderer 注入 `App`。当前默认实现是
+`svgBasemapRenderer`；新增实现使用 `defineBasemapRenderer` 声明，并可通过
+`BasemapRendererRegistry` 按 ID 选择：
+
+```tsx
+const amapBasemapRenderer = defineBasemapRenderer({
+  id: "amap",
+  displayName: "高德地图",
+  component: AmapRouteMap,
+});
+
+root.render(<App basemapRenderer={amapBasemapRenderer} />);
+```
+
+其他实现可以是：
 
 - `AmapBasemapRenderer`
 - `GoogleBasemapRenderer`
 - `MapLibreBasemapRenderer`
 
-地图组件只接收标准路线和覆盖物。路线计算不能放进地图组件。
+地图组件只接收标准 API 路线和选择回调。SDK 生命周期、Web Key、覆盖物和坐标
+显示转换属于具体 Renderer；路线计算、服务端 Secret 和 Provider 调用不能放进
+地图组件。
 
 ### 5.4 地点与地理编码
 
@@ -385,21 +406,34 @@ type RouteSelectionStrategy = (
 
 ```ts
 interface RouteExporter {
-  export(route: ScenicRoute): Promise<ExportResult>;
+  readonly format: string;
+  readonly label: string;
+  exportRoute(route: ApiRecommendedRoute): RouteExport;
 }
 
 interface NavigationLinkProvider {
-  createLink(route: ScenicRoute, context: NavigationContext): Promise<string>;
+  readonly target: string;
+  readonly label: string;
+  createLink(
+    route: ApiRecommendedRoute,
+    context: NavigationLinkContext,
+  ): string;
 }
 ```
 
-实现包括：
+`RouteDeliveryRegistry` 在 Web 组合根注册实现。页面根据每条路线的 policy
+snapshot 与本地注册表的交集生成操作，不再写死格式或地图厂商分支。默认实现
+包括：
 
-- `GpxExporter`
-- `GeoJsonExporter`
-- `AmapNavigationLinkProvider`
-- `GoogleNavigationLinkProvider`
-- 系统分享
+- `gpxRouteExporter`
+- `geoJsonRouteExporter`
+- `amapNavigationLinkProvider`
+
+新增 KML 或其他地图交接时，开发者需要同时：
+
+1. 实现并注册对应端口；
+2. 在 Provider policy 中显式允许该 format/target；
+3. 在 Server API 的 `deliveryCapabilities` 中声明已安装能力。
 
 完整自定义轨迹以找路手机页和 GPX 为准。地图 App 调起属于 Provider 能力，不应修改核心路线。
 
@@ -538,19 +572,30 @@ type ScenicRoute = NormalizedRoute & {
 
 ```text
 src/
-└─ route-recommendation/
-   ├─ models.ts
-   ├─ coordinates.ts
-   ├─ errors.ts
-   ├─ ports.ts
-   ├─ strategies.ts
-   ├─ candidateGeneration.ts
-   ├─ diversity.ts
-   ├─ findScenicRoutes.ts
-   └─ fakes.ts
+├─ route-recommendation/
+│  ├─ models.ts
+│  ├─ coordinates.ts
+│  ├─ errors.ts
+│  ├─ ports.ts
+│  ├─ strategies.ts
+│  ├─ candidateGeneration.ts
+│  ├─ diversity.ts
+│  ├─ findScenicRoutes.ts
+│  └─ fakes.ts
+└─ adapters/
+   └─ amap/
+      ├─ coordinates.ts
+      ├─ dto.ts
+      ├─ errors.ts
+      ├─ httpClient.ts
+      ├─ mappers.ts
+      ├─ placeProvider.ts
+      └─ routeProvider.ts
 
 tests/
 ├─ route-recommendation-core.test.ts
+├─ amap-adapters.test.ts
+├─ fixtures/amap/
 └─ types/
 
 docs/
@@ -720,35 +765,61 @@ Core 不反向依赖 Adapters
 - 注入 Candidate、Score、Selection 策略；
 - 增加 Fake Provider、预算、取消、降级和错误契约测试。
 
-### 阶段二：高德 Adapter
+### 阶段二：高德 Adapter（已完成）
 
-- 增加高德地点与路线 DTO；
-- 在 Adapter 边界完成 GCJ-02/WGS-84 转换；
-- 将高德响应映射为内部模型；
-- 增加 Mapper fixture 和 Provider 契约测试；
-- 在服务端组装高德实现，不修改核心算法。
+- 已增加高德地点与路线 DTO；
+- 已在 Adapter 边界完成 GCJ-02/WGS-84 转换；
+- 已将高德响应映射为内部模型；
+- 已增加 Mapper fixture 和 Provider 契约测试；
+- 已集中处理超时、有限重试、取消、额度和稳定错误；
+- 已对不支持途经点的骑步行接口实施有上限的顺序分段和路线合并；
+- 已使用服务端 Key 完成受控在线冒烟测试；
+- Worker/API 组装留到对应运行时阶段，不修改核心算法。
 
-### 阶段三：环境数据 Adapter
+### 阶段三：WorldCover 环境数据 Adapter（已完成）
 
-- 增加 WorldCover Provider 和 DTO Mapper；
-- 增加水系、公园、高程等 Provider；
-- 将在线栅格读取替换为预计算特征；
-- 展示路段级评分解释；
-- 增加数据覆盖率和置信度。
+- 增加 WorldCover Provider、COG 数据边界和栅格类别映射；
+- 增加 WGS-84 景观点筛选与路线采样；
+- 输出绿地、水边和建成区特征，以及覆盖率和置信度；
+- 增加超时、取消、不可用和缺失覆盖降级；
+- 增加 Fake/fixture、Provider 契约和受控在线冒烟测试。
 
-### 阶段四：增加其他地图服务
+### 阶段四：Server API（已完成）
 
-- 增加 Google 或其他 Provider 的单项能力；
-- 增加区域与能力选择；
-- 验证展示、缓存和归属政策；
-- 保持候选生成、风景特征和评分核心不变。
+- 增加版本化路线推荐 REST API；
+- 在服务端组装高德、WorldCover、候选、评分和多样性策略；
+- 增加请求校验、稳定错误响应、取消和超时；
+- 增加能力发现、健康检查、接口契约和本地 HTTP 冒烟测试；
+- 不在此阶段加入数据库、用户鉴权、React 或部署。
 
-### 阶段五：社区与移动能力
+### 阶段五：Web UI（已完成）
 
-- 增加原子化现场反馈；
-- 增加过期与重复确认机制；
-- 增加路线编辑、收藏和共享；
-- 需要后台定位或离线导航时再开发原生 App。
+- 已增加跑步/骑行、距离和环境偏好条件；
+- 已增加加载、稳定错误、部分数据和路线比较状态；
+- 已用真实 GeoJSON 返回绘制 Provider-neutral 路线几何预览；
+- Web 只调用 Server API，不持有服务端密钥；
+- 已增加客户端契约测试，并完成桌面和移动端浏览器验收；
+- 高德 JS 底图等待独立 Web Key，不伪造地图背景，也不影响路线规划。
+
+### 阶段六：路线交付与用户能力（已完成）
+
+- 已增加 GPX、GeoJSON 和高德 URI 路线中点交付；
+- 已增加条件分享、按实际距离重算、收藏和现场反馈；
+- 已引入 SQLite、匿名 HMAC Bearer 会话和自动过期策略；
+- 已在 API 路线中下发不可扩大的 Provider policy snapshot；
+- 高德路线只保存摘要，不长期保存几何；未知 Provider 默认拒绝；
+- 完整环线以找路网页和 GPX 为准；
+- 后台定位、逐向导航和可视化几何编辑仍留给未来原生 App。
+
+### 阶段七：部署与运行保障（仓库实现已完成）
+
+- 已配置启动时 Secret 校验、客户端限流、Prometheus 指标和 JSON 日志脱敏；
+- 已用单一 Node 运行时提供 API 与构建后的 Web；
+- 已增加 liveness、readiness、优雅关闭和定期过期清理；
+- 已增加多阶段非 root Dockerfile、Compose 数据卷和 GitHub Actions 镜像门禁；
+- 已增加不调用 Provider 的生产只读烟雾；
+- 实际发布需要外部容器平台、域名、TLS、Secret 和持久卷；
+- 横向扩容前按实际负载引入 Redis 与 PostgreSQL/PostGIS。
 
 ## 15. 架构决策摘要
 
