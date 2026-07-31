@@ -19,7 +19,13 @@ import type {
 export type ProviderCallContext = Readonly<{
   requestId: string;
   signal?: AbortSignal;
+  physicalCallBudget?: ProviderPhysicalCallBudget;
 }>;
+
+export interface ProviderPhysicalCallBudget {
+  consume(providerId: string): void;
+  remaining(): number;
+}
 
 export interface PlaceProvider {
   readonly id: string;
@@ -82,6 +88,7 @@ export interface RouteScoringPolicy {
 export type FindScenicRoutesLimits = Readonly<{
   maxCandidates: number;
   maxRouteProviderCalls: number;
+  maxProviderHttpAttempts: number;
   maxConcurrentRouteRequests: number;
   maxSceneryAnchors: number;
   maxOverlapRatio: number;

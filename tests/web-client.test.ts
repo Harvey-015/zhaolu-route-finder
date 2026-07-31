@@ -8,6 +8,7 @@ import {
 } from "../web/src/api.ts";
 import {
   buildPlanRequest,
+  clampDistanceKilometers,
   type RouteFormState,
 } from "../web/src/model.ts";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../web/src/basemap.ts";
 import {
   createAnonymousSession,
+  createAnonymousSessionCoordinator,
   saveRoute,
 } from "../web/src/userDataApi.ts";
 import type {
@@ -90,6 +92,13 @@ test("buildPlanRequest normalizes form values for the API", () => {
     },
     maxResults: 2,
   });
+});
+
+test("distance limits stay consistent when switching activity mode", () => {
+  assert.equal(clampDistanceKilometers("running", 50), 20);
+  assert.equal(clampDistanceKilometers("cycling", 50), 50);
+  assert.equal(clampDistanceKilometers("running", 0), 1);
+  assert.equal(clampDistanceKilometers("cycling", 8.25), 8.25);
 });
 
 test("planRoutes sends the stable API contract and returns a valid response", async () => {
@@ -310,6 +319,7 @@ test("anonymous session and save clients send bearer-scoped contracts", async ()
       request: REQUEST,
       route: DELIVERY_TEST_ROUTE,
     },
+    "save-test-1",
     fetcher,
   );
 
@@ -322,4 +332,68 @@ test("anonymous session and save clients send bearer-scoped contracts", async ()
       .authorization,
     `Bearer ${session.token}`,
   );
+  assert.equal(
+    (calls[1]?.init?.headers as Record<string, string>)[
+      "idempotency-key"
+    ],
+    "save-test-1",
+  );
+});
+
+test("session coordinator shares creation and recovers once from 401", async () => {
+  let stored: { token: string; expiresAt: number } | null = null;
+  let createCount = 0;
+  let clearCount = 0;
+  let releaseFirstCreation:
+    | ((session: { token: string; expiresAt: number }) => void)
+    | undefined;
+  const firstCreation = new Promise<{
+    token: string;
+    expiresAt: number;
+  }>((resolve) => {
+    releaseFirstCreation = resolve;
+  });
+  const coordinator = createAnonymousSessionCoordinator({
+    read: () => stored,
+    write: (session) => {
+      stored = session;
+    },
+    clear: () => {
+      clearCount += 1;
+      stored = null;
+    },
+    create: async () => {
+      createCount += 1;
+      if (createCount === 1) return firstCreation;
+      return {
+        token: `session-${createCount}`,
+        expiresAt: 1_900_000_000_000,
+      };
+    },
+  });
+
+  const firstToken = coordinator.token();
+  const secondToken = coordinator.token();
+  assert.equal(createCount, 1);
+  releaseFirstCreation?.({
+    token: "session-1",
+    expiresAt: 1_900_000_000_000,
+  });
+  assert.deepEqual(
+    await Promise.all([firstToken, secondToken]),
+    ["session-1", "session-1"],
+  );
+
+  const attemptedTokens: string[] = [];
+  const result = await coordinator.run(async (token) => {
+    attemptedTokens.push(token);
+    if (token === "session-1") {
+      throw new RouteApiError("UNAUTHORIZED", 401, false);
+    }
+    return "recovered";
+  });
+  assert.equal(result, "recovered");
+  assert.deepEqual(attemptedTokens, ["session-1", "session-2"]);
+  assert.equal(createCount, 2);
+  assert.equal(clearCount, 1);
 });

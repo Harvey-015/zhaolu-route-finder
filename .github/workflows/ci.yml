@@ -26,8 +26,26 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run test
 
-  container:
+  browser:
     needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:e2e
+
+  container:
+    needs:
+      - verify
+      - browser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -7,6 +7,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
+import { BlockList, isIP } from "node:net";
 import { extname, resolve, sep } from "node:path";
 import type { RuntimeLogger } from "../runtime/logger.ts";
 import { safeRequestLogFields } from "../runtime/logger.ts";
@@ -26,7 +27,95 @@ export type NodeApiServerOptions = Readonly<{
   metrics?: RuntimeMetrics;
   logger?: RuntimeLogger;
   observabilityToken?: string;
+  trustedProxyRanges?: readonly string[];
 }>;
+
+type TrustedProxyMatcher = Readonly<{
+  contains(address: string): boolean;
+}>;
+
+function normalizeIpAddress(value: string): string | null {
+  let address = value.trim();
+  if (!address) return null;
+  const zoneIndex = address.indexOf("%");
+  if (zoneIndex >= 0) address = address.slice(0, zoneIndex);
+  const mappedIpv4 = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(
+    address,
+  );
+  if (mappedIpv4 && isIP(mappedIpv4[1]) === 4) {
+    return mappedIpv4[1];
+  }
+  return isIP(address) === 0 ? null : address.toLowerCase();
+}
+
+function createTrustedProxyMatcher(
+  ranges: readonly string[],
+): TrustedProxyMatcher | null {
+  if (ranges.length === 0) return null;
+  const blockList = new BlockList();
+  for (const rawRange of ranges) {
+    const parts = rawRange.split("/");
+    if (parts.length > 2) {
+      throw new RangeError("TRUSTED_PROXY_RANGE_INVALID");
+    }
+    const address = normalizeIpAddress(parts[0] ?? "");
+    const family = address ? isIP(address) : 0;
+    if (!address || family === 0) {
+      throw new RangeError("TRUSTED_PROXY_RANGE_INVALID");
+    }
+    const type = family === 4 ? "ipv4" : "ipv6";
+    if (parts.length === 1) {
+      blockList.addAddress(address, type);
+      continue;
+    }
+    const prefix = Number(parts[1]);
+    const maximumPrefix = family === 4 ? 32 : 128;
+    if (
+      !Number.isInteger(prefix) ||
+      prefix < 0 ||
+      prefix > maximumPrefix
+    ) {
+      throw new RangeError("TRUSTED_PROXY_RANGE_INVALID");
+    }
+    blockList.addSubnet(address, prefix, type);
+  }
+  return {
+    contains(address) {
+      const normalized = normalizeIpAddress(address);
+      if (!normalized) return false;
+      return blockList.check(
+        normalized,
+        isIP(normalized) === 4 ? "ipv4" : "ipv6",
+      );
+    },
+  };
+}
+
+function clientAddress(
+  request: IncomingMessage,
+  trustedProxies: TrustedProxyMatcher | null,
+): string {
+  const remoteAddress = normalizeIpAddress(
+    request.socket.remoteAddress ?? "",
+  );
+  if (!remoteAddress) return "unknown";
+  if (!trustedProxies?.contains(remoteAddress)) {
+    return remoteAddress;
+  }
+  const forwarded = request.headers["x-forwarded-for"];
+  const forwardedValue = Array.isArray(forwarded)
+    ? forwarded.join(",")
+    : forwarded;
+  if (!forwardedValue) return remoteAddress;
+  const hops = forwardedValue.split(",").map(normalizeIpAddress);
+  if (hops.some((hop) => hop === null)) return remoteAddress;
+  let candidate = remoteAddress;
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    if (!trustedProxies.contains(candidate)) return candidate;
+    candidate = hops[index] as string;
+  }
+  return candidate;
+}
 
 function webHeaders(headers: IncomingHttpHeaders): Headers {
   const result = new Headers();
@@ -71,13 +160,14 @@ async function readNodeBody(
 async function toWebRequest(
   request: IncomingMessage,
   response: ServerResponse,
+  trustedProxies: TrustedProxyMatcher | null,
 ): Promise<Request> {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://localhost");
   const headers = webHeaders(request.headers);
   headers.set(
     "x-zhaolu-client-key",
-    request.socket.remoteAddress ?? "unknown",
+    clientAddress(request, trustedProxies),
   );
   const controller = new AbortController();
   request.once("aborted", () => controller.abort());
@@ -167,6 +257,22 @@ function staticHeaders(pathname: string): Headers {
   });
 }
 
+function missingStaticResponse(pathname: string): Response {
+  const headers = staticHeaders(pathname);
+  headers.set("cache-control", "no-store");
+  return new Response(null, { status: 404, headers });
+}
+
+function isMissingStaticFile(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error.code === "ENOENT" ||
+      error.code === "ENOTDIR" ||
+      error.code === "EISDIR")
+  );
+}
+
 async function staticResponse(
   request: IncomingMessage,
   staticRoot: string,
@@ -197,12 +303,20 @@ async function staticResponse(
   let bytes: Buffer;
   try {
     bytes = await readFile(candidate);
-  } catch {
+  } catch (error) {
+    if (!isMissingStaticFile(error)) throw error;
+    if (
+      decodedPath.startsWith("/assets/") ||
+      extname(decodedPath) !== ""
+    ) {
+      return missingStaticResponse(decodedPath);
+    }
     candidate = resolve(root, "index.html");
     pathname = "/index.html";
     try {
       bytes = await readFile(candidate);
-    } catch {
+    } catch (fallbackError) {
+      if (!isMissingStaticFile(fallbackError)) throw fallbackError;
       return null;
     }
   }
@@ -234,6 +348,9 @@ export function createNodeApiServer(
   handler: ServerApiHandler,
   options: NodeApiServerOptions = {},
 ): Server {
+  const trustedProxies = createTrustedProxyMatcher(
+    options.trustedProxyRanges ?? [],
+  );
   return createServer(async (request, response) => {
     const startedAt = performance.now();
     const method = request.method ?? "GET";
@@ -295,7 +412,11 @@ export function createNodeApiServer(
         );
       }
       if (!webResponse) {
-        const webRequest = await toWebRequest(request, response);
+        const webRequest = await toWebRequest(
+          request,
+          response,
+          trustedProxies,
+        );
         webResponse = await handler(webRequest);
       }
       status = webResponse.status;

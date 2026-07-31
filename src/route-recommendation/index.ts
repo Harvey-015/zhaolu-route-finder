@@ -5,5 +5,6 @@ export * from "./errors.ts";
 export * from "./findScenicRoutes.ts";
 export * from "./models.ts";
 export * from "./ports.ts";
+export * from "./providerBudget.ts";
 export * from "./scoring.ts";
 export * from "./strategies.ts";

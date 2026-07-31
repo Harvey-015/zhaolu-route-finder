@@ -65,13 +65,15 @@ expiresAfterSeconds
 - `SignedSessionService` 使用 HMAC-SHA256 签发匿名 Bearer token；
 - token 和 SQLite session 必须同时有效；
 - `saved_routes` 通过外键绑定匿名 user id；
+- 同一 user id 与 `Idempotency-Key` 只生成一条收藏；
 - `field_reports` 绑定已有收藏，评分范围为 1–5；
 - 删除收藏会级联删除反馈；
 - 过期清理按反馈、收藏、会话顺序执行。
 
 SQLite 来自 Node `node:sqlite`，项目最低版本 Node 22.13 已可无命令行开关使用。
-Node 22 仍将该模块标为 active development；若生产规模、并发或迁移需求增加，
-保持 `UserDataStore` 端口不变，替换为 PostgreSQL/PostGIS Adapter。
+schema 使用顺序、事务化 migration 和 `PRAGMA user_version`；启动时拒绝程序不支持
+的未来版本。Node 22 仍将该模块标为 active development；若生产规模、并发或迁移
+需求增加，保持 `UserDataStore` 端口不变，替换为 PostgreSQL/PostGIS Adapter。
 
 匿名设备会话不是注册用户系统，不提供跨设备恢复、密码、邮箱或第三方登录。
 需要这些能力时应在此 API 边界增加正式身份 Provider，而不是把身份逻辑放入

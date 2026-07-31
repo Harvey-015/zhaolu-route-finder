@@ -23,6 +23,15 @@ export const INITIAL_ROUTE_FORM: RouteFormState = {
   maxResults: 3,
 };
 
+export function clampDistanceKilometers(
+  mode: RouteFormState["mode"],
+  distanceKilometers: number,
+): number {
+  const maximum = mode === "cycling" ? 50 : 20;
+  if (!Number.isFinite(distanceKilometers)) return 1;
+  return Math.max(1, Math.min(maximum, distanceKilometers));
+}
+
 export function buildPlanRequest(
   form: RouteFormState,
   requestId: string,
@@ -36,7 +45,10 @@ export function buildPlanRequest(
     },
     mode: form.mode,
     targetDistanceMeters: Math.round(
-      form.distanceKilometers * 1_000,
+      clampDistanceKilometers(
+        form.mode,
+        form.distanceKilometers,
+      ) * 1_000,
     ),
     preferences: {
       greenery: form.greenery,

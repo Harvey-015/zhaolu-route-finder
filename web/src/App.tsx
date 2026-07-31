@@ -22,6 +22,7 @@ import {
 import type { BasemapRenderer } from "./basemap.ts";
 import {
   buildPlanRequest,
+  clampDistanceKilometers,
   formatDistance,
   formatDuration,
   formatPercent,
@@ -31,12 +32,13 @@ import {
 } from "./model.ts";
 import { svgBasemapRenderer } from "./RouteMap.tsx";
 import {
-  createAnonymousSession,
+  createAnonymousSessionCoordinator,
   deleteSavedRoute,
   listSavedRoutes,
   saveRoute,
   sendFieldReport,
   type AnonymousSession,
+  type AnonymousSessionCoordinator,
 } from "./userDataApi.ts";
 
 const SESSION_STORAGE_KEY = "zhaolu.anonymous-session.v1";
@@ -69,6 +71,10 @@ function rememberSession(session: AnonymousSession): void {
     SESSION_STORAGE_KEY,
     JSON.stringify(session),
   );
+}
+
+function forgetSession(): void {
+  localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 type SearchState =
@@ -338,6 +344,7 @@ function DeliveryPanel({
   mode,
   deliveryRegistry,
   savedRoute,
+  saving,
   notice,
   onDownload,
   onSave,
@@ -349,6 +356,7 @@ function DeliveryPanel({
   mode: RouteFormState["mode"];
   deliveryRegistry: RouteDeliveryRegistry;
   savedRoute: SavedRouteSummary | null;
+  saving: boolean;
   notice: string | null;
   onDownload: (format: string) => void;
   onSave: () => void;
@@ -406,12 +414,13 @@ function DeliveryPanel({
         <button
           disabled={
             route.delivery.persistence === "denied" ||
-            savedRoute !== null
+            savedRoute !== null ||
+            saving
           }
           onClick={onSave}
           type="button"
         >
-          {savedRoute ? "已收藏" : "收藏路线"}
+          {savedRoute ? "已收藏" : saving ? "正在收藏…" : "收藏路线"}
         </button>
       </div>
       <p className="delivery-note">
@@ -508,19 +517,34 @@ export function App({
   >({});
   const [deliveryNotice, setDeliveryNotice] =
     useState<string | null>(null);
+  const [savingRouteIds, setSavingRouteIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const activeRequest = useRef<AbortController | null>(null);
+  const savingRoutes = useRef(new Set<string>());
+  const sessionCoordinator = useRef<
+    AnonymousSessionCoordinator | null
+  >(null);
+  if (!sessionCoordinator.current) {
+    sessionCoordinator.current = createAnonymousSessionCoordinator({
+      read: storedSession,
+      write: rememberSession,
+      clear: forgetSession,
+    });
+  }
 
   useEffect(() => {
     const session = storedSession();
     if (session) {
-      void listSavedRoutes(session.token)
+      void sessionCoordinator.current!
+        .run((token) => listSavedRoutes(token))
         .then(setSavedRoutes)
         .catch((error: unknown) => {
           if (
             error instanceof RouteApiError &&
             error.status === 401
           ) {
-            localStorage.removeItem(SESSION_STORAGE_KEY);
+            forgetSession();
           }
         });
     }
@@ -600,34 +624,33 @@ export function App({
       : savedByResultRoute[selectedRoute.id] ?? null;
   const BasemapComponent = basemapRenderer.component;
 
-  const sessionToken = async (): Promise<string> => {
-    const current = storedSession();
-    if (current) return current.token;
-    const created = await createAnonymousSession();
-    rememberSession(created);
-    return created.token;
-  };
-
   const saveSelectedRoute = async () => {
-    if (!selectedRoute || !lastRequest) return;
+    if (!selectedRoute || !lastRequest || selectedSavedRoute) return;
+    const route = selectedRoute;
+    if (savingRoutes.current.has(route.id)) return;
+    savingRoutes.current.add(route.id);
+    setSavingRouteIds(new Set(savingRoutes.current));
     setDeliveryNotice("正在收藏…");
+    const idempotencyKey = `save-${crypto.randomUUID()}`;
     try {
-      const token = await sessionToken();
-      const saved = await saveRoute(token, {
-        name: routeDisplayName(
-          selectedRoute,
-          routes.indexOf(selectedRoute),
+      const saved = await sessionCoordinator.current!.run((token) =>
+        saveRoute(
+          token,
+          {
+            name: routeDisplayName(route, routes.indexOf(route)),
+            request: lastRequest,
+            route,
+          },
+          idempotencyKey,
         ),
-        request: lastRequest,
-        route: selectedRoute,
-      });
+      );
       setSavedRoutes((current) => [
         saved,
         ...current.filter(({ id }) => id !== saved.id),
       ]);
       setSavedByResultRoute((current) => ({
         ...current,
-        [selectedRoute.id]: saved,
+        [route.id]: saved,
       }));
       setDeliveryNotice(
         saved.hasGeometry
@@ -640,6 +663,9 @@ export function App({
           ? `收藏失败：${error.code}`
           : "收藏失败，请稍后重试。",
       );
+    } finally {
+      savingRoutes.current.delete(route.id);
+      setSavingRouteIds(new Set(savingRoutes.current));
     }
   };
 
@@ -666,10 +692,10 @@ export function App({
   };
 
   const removeSavedRoute = async (routeId: string) => {
-    const session = storedSession();
-    if (!session) return;
     try {
-      await deleteSavedRoute(session.token, routeId);
+      await sessionCoordinator.current!.run((token) =>
+        deleteSavedRoute(token, routeId),
+      );
       setSavedRoutes((current) =>
         current.filter(({ id }) => id !== routeId),
       );
@@ -694,13 +720,13 @@ export function App({
     rating: 1 | 2 | 3 | 4 | 5,
   ) => {
     if (!selectedSavedRoute) return;
-    const session = storedSession();
-    if (!session) return;
     try {
-      await sendFieldReport(
-        session.token,
-        selectedSavedRoute.id,
-        rating,
+      await sessionCoordinator.current!.run((token) =>
+        sendFieldReport(
+          token,
+          selectedSavedRoute.id,
+          rating,
+        ),
       );
       setDeliveryNotice(`已提交 ${rating} 分现场体验，谢谢。`);
     } catch (error) {
@@ -773,7 +799,16 @@ export function App({
                   className={
                     form.mode === "running" ? "active" : ""
                   }
-                  onClick={() => updateForm("mode", "running")}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      mode: "running",
+                      distanceKilometers: clampDistanceKilometers(
+                        "running",
+                        current.distanceKilometers,
+                      ),
+                    }))
+                  }
                   type="button"
                 >
                   <span>RUN</span>
@@ -784,7 +819,16 @@ export function App({
                   className={
                     form.mode === "cycling" ? "active" : ""
                   }
-                  onClick={() => updateForm("mode", "cycling")}
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      mode: "cycling",
+                      distanceKilometers: clampDistanceKilometers(
+                        "cycling",
+                        current.distanceKilometers,
+                      ),
+                    }))
+                  }
                   type="button"
                 >
                   <span>RIDE</span>
@@ -909,8 +953,8 @@ export function App({
               onAdjust={() => {
                 updateForm(
                   "distanceKilometers",
-                  Math.max(
-                    1,
+                  clampDistanceKilometers(
+                    form.mode,
                     Math.round(
                       selectedRoute.distanceMeters / 1_000,
                     ),
@@ -945,6 +989,7 @@ export function App({
               }}
               route={selectedRoute}
               savedRoute={selectedSavedRoute}
+              saving={savingRouteIds.has(selectedRoute.id)}
             />
           ) : null}
           <SavedRoutesPanel
