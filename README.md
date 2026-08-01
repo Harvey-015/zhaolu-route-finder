@@ -24,6 +24,7 @@
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
 - React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
+- 高德 JS API 2.0 底图、服务端安全密钥代理和无 Key SVG 降级；
 - 桌面和移动端浏览器验收；
 - 注册式 `RouteExporter`、`NavigationLinkProvider`，以及默认
   GPX、GeoJSON 和高德 URI 路线交付；

@@ -69,6 +69,33 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/map-config": {
+      get: {
+        operationId: "getWebMapConfig",
+        description:
+          "Returns the public Web JS key and same-origin security proxy path. The security code is never returned.",
+        responses: {
+          "200": {
+            description: "Runtime Web map configuration or a disabled fallback.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["schemaVersion", "enabled"],
+                  properties: {
+                    schemaVersion: { const: "1" },
+                    enabled: { type: "boolean" },
+                    providerId: { const: "amap-jsapi" },
+                    key: { type: "string" },
+                    serviceHost: { const: "/_AMapService" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     "/api/v1/openapi.json": {
       get: {
         operationId: "getOpenApiDocument",

@@ -799,7 +799,8 @@ Core 不反向依赖 Adapters
 - 已用真实 GeoJSON 返回绘制 Provider-neutral 路线几何预览；
 - Web 只调用 Server API，不持有服务端密钥；
 - 已增加客户端契约测试，并完成桌面和移动端浏览器验收；
-- 高德 JS 底图等待独立 Web Key，不伪造地图背景，也不影响路线规划。
+- 已增加高德 JS API 2.0 Renderer、服务端安全密钥代理和无 Key SVG 降级；实际
+  显示取决于部署环境注入独立 Web Key、安全密钥与公开来源。
 
 ### 阶段六：路线交付与用户能力（已完成）
 

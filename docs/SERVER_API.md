@@ -33,6 +33,7 @@ http://127.0.0.1:8787
 GET  /api/v1/health
 GET  /api/v1/ready
 GET  /api/v1/capabilities
+GET  /api/v1/map-config
 GET  /api/v1/openapi.json
 POST /api/v1/routes/plan
 POST /api/v1/session
@@ -43,6 +44,10 @@ POST /api/v1/saved-routes/{routeId}/feedback
 ```
 
 机器可读契约由 `/api/v1/openapi.json` 提供，格式为 OpenAPI 3.1。
+
+`GET /api/v1/map-config` 只返回是否启用底图、Provider ID、公开 Web JS Key 和
+同源 `/_AMapService` 路径，绝不返回 `AMAP_JS_SECURITY_CODE`。安全密钥由 Node
+代理在白名单内的上游请求中追加。
 
 ## 路线请求
 

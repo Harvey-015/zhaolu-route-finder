@@ -32,7 +32,8 @@ pnpm run dev:web
 - 调整绿地、水边和低建成区偏好；
 - 查看加载、错误、降级和成功状态；
 - 比较最多三条路线的距离、时长、得分和环境指标；
-- 在 SVG 中预览 Server API 返回的 WGS-84 GeoJSON 几何；
+- 配置 Web Key 时在高德 JS API 2.0 底图上显示路线；
+- 未配置地图或加载失败时降级为 SVG WGS-84 GeoJSON 几何预览；
 - 在路线卡片、图形和图例之间同步选择。
 - 下载 GPX 或 GeoJSON；
 - 调起高德到路线中点，并明确说明不能交付完整自定义环线；
@@ -41,9 +42,10 @@ pnpm run dev:web
 - 对收藏路线提交 1–5 分现场体验；
 - 采用路线实际距离调整条件后重新规划。
 
-默认 `svgBasemapRenderer` 只是几何预览，不是地理底图。Web 已通过
-`BasemapRenderer` 接口接收地图实现；接入高德、MapLibre、Google Maps 或
-Leaflet 时，只需实现 `BasemapViewportProps` 对应组件，然后注入 `App`：
+默认 `amapBasemapRenderer` 使用高德 JS API 2.0，并在未配置或加载失败时回退到
+`svgBasemapRenderer`。Web 通过 `BasemapRenderer` 接口接收地图实现；接入
+MapLibre、Google Maps 或 Leaflet 时，只需实现 `BasemapViewportProps` 对应组件，
+然后注入 `App`：
 
 ```tsx
 const renderer = defineBasemapRenderer({
@@ -57,8 +59,11 @@ createRoot(root).render(<App basemapRenderer={renderer} />);
 
 Renderer 只接收标准 `ApiRecommendedRoute`、当前路线 ID 和选择回调。地图 SDK
 生命周期、覆盖物与显示坐标转换留在 Renderer 内部；路线规划和服务端 Secret
-不得进入 Renderer。高德 JS 底图需要独立 Web Key，不能复用服务端 Web
-Service Key。
+不得进入 Renderer。高德 JS 底图需要独立 Web Key，不能复用服务端 Web Service
+Key。生产配置使用 `AMAP_WEB_JS_KEY`、`AMAP_JS_SECURITY_CODE` 与
+`ZHAOLU_PUBLIC_ORIGIN`。浏览器只通过 `/api/v1/map-config` 获得公开 Web Key；
+安全密钥留在服务端，由同源 `/_AMapService` 白名单代理追加 `jscode`。三项缺一时
+配置校验失败；三项均为空时保留 SVG 降级模式。
 
 路线导出和地图 App 交接同样由 `RouteDeliveryRegistry` 注入。页面会自动显示
 “路线 policy 允许且当前注册表已安装”的操作，新增格式或导航 Provider 不需要

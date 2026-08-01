@@ -9,6 +9,11 @@ export type RuntimeConfig = Readonly<{
   amapCity?: string;
   amapMaxHttpAttemptsPerPlan: number;
   amapMaxHttpAttemptsPerMinute: number;
+  amapWebMap?: Readonly<{
+    webJsKey: string;
+    securityCode: string;
+    publicOrigin: string;
+  }>;
   sessionSecret: string;
   observabilityToken: string;
   databasePath: string;
@@ -22,6 +27,49 @@ export type RuntimeConfig = Readonly<{
     userDataPerMinute: number;
   }>;
 }>;
+
+function optionalAmapWebMap(
+  environment: NodeJS.ProcessEnv,
+): RuntimeConfig["amapWebMap"] {
+  const webJsKey = environment.AMAP_WEB_JS_KEY?.trim() ?? "";
+  const securityCode =
+    environment.AMAP_JS_SECURITY_CODE?.trim() ?? "";
+  const publicOrigin =
+    environment.ZHAOLU_PUBLIC_ORIGIN?.trim() ?? "";
+  if (!webJsKey && !securityCode && !publicOrigin) return undefined;
+  if (!webJsKey) throw new RangeError("AMAP_WEB_JS_KEY_REQUIRED");
+  if (!securityCode) {
+    throw new RangeError("AMAP_JS_SECURITY_CODE_REQUIRED");
+  }
+  if (!publicOrigin) {
+    throw new RangeError("ZHAOLU_PUBLIC_ORIGIN_REQUIRED");
+  }
+
+  let origin: URL;
+  try {
+    origin = new URL(publicOrigin);
+  } catch {
+    throw new RangeError("ZHAOLU_PUBLIC_ORIGIN_INVALID");
+  }
+  const localDevelopmentOrigin =
+    origin.protocol === "http:" &&
+    (origin.hostname === "127.0.0.1" || origin.hostname === "localhost");
+  if (
+    (origin.protocol !== "https:" && !localDevelopmentOrigin) ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
+  ) {
+    throw new RangeError("ZHAOLU_PUBLIC_ORIGIN_INVALID");
+  }
+  return Object.freeze({
+    webJsKey,
+    securityCode,
+    publicOrigin: origin.origin,
+  });
+}
 
 function requiredSecret(
   environment: NodeJS.ProcessEnv,
@@ -83,6 +131,7 @@ export function loadRuntimeConfig(
   if (logLevel !== "info" && logLevel !== "error") {
     throw new RangeError("LOG_LEVEL_INVALID");
   }
+  const amapWebMap = optionalAmapWebMap(environment);
   return Object.freeze({
     host: environment.HOST?.trim() || "0.0.0.0",
     port: integer(environment, "PORT", 8787, 1, 65_535),
@@ -107,6 +156,7 @@ export function loadRuntimeConfig(
       1,
       100_000,
     ),
+    ...(amapWebMap ? { amapWebMap } : {}),
     sessionSecret: requiredSecret(
       environment,
       "ZHAOLU_SESSION_SECRET",

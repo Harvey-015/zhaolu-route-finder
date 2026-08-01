@@ -7,6 +7,9 @@ type MetricValue = {
 
 export function normalizedRoutePath(pathname: string): string {
   if (pathname.startsWith("/assets/")) return "/assets/:asset";
+  if (pathname.startsWith("/_AMapService/")) {
+    return "/_AMapService/:path";
+  }
   if (
     /^\/api\/v1\/saved-routes\/[0-9a-f-]{36}\/feedback$/.test(
       pathname,
@@ -24,6 +27,7 @@ export function normalizedRoutePath(pathname: string): string {
     "/index.html",
     "/api/v1/capabilities",
     "/api/v1/health",
+    "/api/v1/map-config",
     "/api/v1/openapi.json",
     "/api/v1/ready",
     "/api/v1/routes/plan",

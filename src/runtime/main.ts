@@ -86,6 +86,15 @@ export async function startProductionRuntime(
         ? "ok"
         : "error",
     }),
+    ...(config.amapWebMap
+      ? {
+          webMapConfig: {
+            providerId: "amap-jsapi" as const,
+            key: config.amapWebMap.webJsKey,
+            serviceHost: "/_AMapService" as const,
+          },
+        }
+      : {}),
   });
   const server = createNodeApiServer(handler, {
     staticRoot: config.staticRoot,
@@ -93,6 +102,14 @@ export async function startProductionRuntime(
     metrics,
     observabilityToken: config.observabilityToken,
     trustedProxyRanges: config.trustedProxyRanges,
+    ...(config.amapWebMap
+      ? {
+          amapJsApiProxy: {
+            securityCode: config.amapWebMap.securityCode,
+            publicOrigin: config.amapWebMap.publicOrigin,
+          },
+        }
+      : {}),
   });
   let closing: Promise<void> | null = null;
 

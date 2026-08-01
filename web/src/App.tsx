@@ -11,6 +11,7 @@ import type {
 } from "../../src/server-api/contracts.ts";
 import type { RouteDeliveryRegistry } from "../../src/route-delivery/registry.ts";
 import type { SavedRouteSummary } from "../../src/user-data/models.ts";
+import { amapBasemapRenderer } from "./AmapBasemap.tsx";
 import { planRoutes, RouteApiError } from "./api.ts";
 import {
   createRouteShareUrl,
@@ -30,7 +31,6 @@ import {
   routeDisplayName,
   type RouteFormState,
 } from "./model.ts";
-import { svgBasemapRenderer } from "./RouteMap.tsx";
 import {
   createAnonymousSessionCoordinator,
   deleteSavedRoute,
@@ -496,7 +496,7 @@ export type AppProps = Readonly<{
 }>;
 
 export function App({
-  basemapRenderer = svgBasemapRenderer,
+  basemapRenderer = amapBasemapRenderer,
   deliveryRegistry = defaultRouteDeliveryRegistry,
 }: AppProps = {}) {
   const [form, setForm] = useState<RouteFormState>(() =>

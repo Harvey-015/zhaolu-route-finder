@@ -110,7 +110,7 @@ export function RouteMap({
           <p className="eyebrow">GeoJSON 路线预览</p>
           <strong>多方向路线对比</strong>
         </div>
-        <span className="map-note">底图待 Web Key 接入</span>
+        <span className="map-note">离线几何预览</span>
       </div>
       <svg
         aria-label="路线几何预览图"
