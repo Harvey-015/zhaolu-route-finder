@@ -1,42 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { wgs84ToGcj02 } from "../../src/adapters/amap/coordinates.ts";
 import { wgs84Point } from "../../src/route-recommendation/coordinates.ts";
 import type { ApiRecommendedRoute } from "../../src/server-api/contracts.ts";
 import {
   defineBasemapRenderer,
+  type BasemapRenderer,
   type BasemapViewportProps,
 } from "./basemap.ts";
 import { loadWebMapConfig } from "./mapConfig.ts";
+import {
+  MapLayerProviderRegistry,
+} from "./mapLayers.ts";
+import {
+  defaultAmapMapLayerRegistry,
+  type AmapLayer,
+  type AmapMap,
+  type AmapMapLayerContext,
+  type AmapMapLayerProvider,
+  type AmapNamespace,
+  type AmapOverlay,
+} from "./amapLayers.ts";
 import { ROUTE_COLORS, routeDisplayName } from "./model.ts";
 import { RouteMap } from "./RouteMap.tsx";
-
-type AmapOverlay = Readonly<{
-  on?: (event: string, callback: () => void) => void;
-}>;
-
-type AmapMap = Readonly<{
-  add(overlays: AmapOverlay | readonly AmapOverlay[]): void;
-  remove(overlays: readonly AmapOverlay[]): void;
-  setFitView(
-    overlays?: readonly AmapOverlay[],
-    immediately?: boolean,
-    avoid?: readonly number[],
-  ): void;
-  destroy(): void;
-}>;
-
-type AmapNamespace = Readonly<{
-  Map: new (
-    container: HTMLDivElement,
-    options: Readonly<Record<string, unknown>>,
-  ) => AmapMap;
-  Polyline: new (
-    options: Readonly<Record<string, unknown>>,
-  ) => AmapOverlay;
-  CircleMarker: new (
-    options: Readonly<Record<string, unknown>>,
-  ) => AmapOverlay;
-}>;
 
 declare global {
   interface Window {
@@ -101,20 +86,81 @@ export function routeGeometryForAmap(
   });
 }
 
+function activeLayerProviders(
+  registry: MapLayerProviderRegistry<AmapMapLayerContext, AmapLayer>,
+  baseLayerId: string,
+  referenceLayerIds: ReadonlySet<string>,
+): readonly AmapMapLayerProvider[] {
+  const baseProvider = registry.require(baseLayerId);
+  if (baseProvider.kind !== "base") {
+    throw new TypeError("AMAP_BASE_LAYER_PROVIDER_REQUIRED");
+  }
+  const referenceProviders = [...referenceLayerIds].map((id) => {
+    const provider = registry.require(id);
+    if (provider.kind !== "reference") {
+      throw new TypeError("AMAP_REFERENCE_LAYER_PROVIDER_REQUIRED");
+    }
+    return provider;
+  });
+  return [baseProvider, ...referenceProviders];
+}
+
+function createActiveLayers(
+  AMap: AmapNamespace,
+  providers: readonly AmapMapLayerProvider[],
+): readonly AmapLayer[] {
+  const layers = providers.flatMap((provider) =>
+    [...provider.createLayers({ AMap })],
+  );
+  if (layers.length === 0) {
+    throw new TypeError("AMAP_ACTIVE_LAYERS_REQUIRED");
+  }
+  return layers;
+}
+
 function AmapViewport({
   routes,
   selectedRouteId,
   onSelectRoute,
   keyValue,
   serviceHost,
+  layerRegistry,
+  defaultBaseLayerId,
+  defaultReferenceLayerIds,
 }: BasemapViewportProps &
-  Readonly<{ keyValue: string; serviceHost: string }>) {
+  Readonly<{
+    keyValue: string;
+    serviceHost: string;
+    layerRegistry: MapLayerProviderRegistry<
+      AmapMapLayerContext,
+      AmapLayer
+    >;
+    defaultBaseLayerId: string;
+    defaultReferenceLayerIds: readonly string[];
+  }>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<AmapMap | null>(null);
   const amapRef = useRef<AmapNamespace | null>(null);
   const overlaysRef = useRef<readonly AmapOverlay[]>([]);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [baseLayerId, setBaseLayerId] = useState(
+    defaultBaseLayerId,
+  );
+  const [referenceLayerIds, setReferenceLayerIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set(defaultReferenceLayerIds));
+  const baseProviders = layerRegistry.providers("base");
+  const referenceProviders = layerRegistry.providers("reference");
+  const visibleProviders = useMemo(
+    () =>
+      activeLayerProviders(
+        layerRegistry,
+        baseLayerId,
+        referenceLayerIds,
+      ),
+    [baseLayerId, layerRegistry, referenceLayerIds],
+  );
 
   useEffect(() => {
     let active = true;
@@ -123,9 +169,9 @@ function AmapViewport({
         if (!active || !containerRef.current) return;
         amapRef.current = AMap;
         mapRef.current = new AMap.Map(containerRef.current, {
+          layers: createActiveLayers(AMap, visibleProviders),
           zoom: 13,
           viewMode: "2D",
-          mapStyle: "amap://styles/normal",
           resizeEnable: true,
         });
         setReady(true);
@@ -140,7 +186,18 @@ function AmapViewport({
       amapRef.current = null;
       overlaysRef.current = [];
     };
-  }, [keyValue, serviceHost]);
+  }, [keyValue, layerRegistry, serviceHost]);
+
+  useEffect(() => {
+    const AMap = amapRef.current;
+    const map = mapRef.current;
+    if (!ready || !AMap || !map) return;
+    try {
+      map.setLayers(createActiveLayers(AMap, visibleProviders));
+    } catch {
+      setFailed(true);
+    }
+  }, [ready, visibleProviders]);
 
   useEffect(() => {
     const AMap = amapRef.current;
@@ -203,10 +260,48 @@ function AmapViewport({
         <div>
           <p className="eyebrow">高德地图</p>
           <strong>真实道路路线对比</strong>
+          <span className="map-note">
+            {ready
+              ? `${visibleProviders[0]?.displayName ?? "地图"} · JS API 2.0`
+              : "地图加载中…"}
+          </span>
         </div>
-        <span className="map-note">
-          {ready ? "JS API 2.0" : "地图加载中…"}
-        </span>
+      </div>
+      <div className="map-layer-controls" aria-label="地图图层">
+        <div
+          aria-label="底图"
+          className="map-base-layer-switch"
+          role="group"
+        >
+          {baseProviders.map((provider) => (
+            <button
+              aria-pressed={provider.id === baseLayerId}
+              className={provider.id === baseLayerId ? "active" : ""}
+              key={provider.id}
+              onClick={() => setBaseLayerId(provider.id)}
+              type="button"
+            >
+              {provider.displayName}
+            </button>
+          ))}
+        </div>
+        {referenceProviders.map((provider) => (
+          <label className="map-reference-layer" key={provider.id}>
+            <input
+              checked={referenceLayerIds.has(provider.id)}
+              onChange={(event) => {
+                setReferenceLayerIds((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(provider.id);
+                  else next.delete(provider.id);
+                  return next;
+                });
+              }}
+              type="checkbox"
+            />
+            {provider.displayName}
+          </label>
+        ))}
       </div>
       <div
         aria-label="高德路线地图"
@@ -237,11 +332,31 @@ function AmapViewport({
           </button>
         ))}
       </div>
+      <div className="map-attribution">
+        图层数据：
+        {[...new Set(visibleProviders.map(({ attribution }) => attribution))]
+          .join(" · ")}
+      </div>
     </div>
   );
 }
 
-export function AmapBasemap(props: BasemapViewportProps) {
+export type AmapBasemapProps = BasemapViewportProps &
+  Readonly<{
+    layerRegistry?: MapLayerProviderRegistry<
+      AmapMapLayerContext,
+      AmapLayer
+    >;
+    defaultBaseLayerId?: string;
+    defaultReferenceLayerIds?: readonly string[];
+  }>;
+
+export function AmapBasemap({
+  layerRegistry = defaultAmapMapLayerRegistry,
+  defaultBaseLayerId = "amap-satellite",
+  defaultReferenceLayerIds,
+  ...props
+}: AmapBasemapProps) {
   const [config, setConfig] = useState<
     Awaited<ReturnType<typeof loadWebMapConfig>> | null
   >(null);
@@ -260,20 +375,77 @@ export function AmapBasemap(props: BasemapViewportProps) {
     };
   }, []);
 
-  if (props.routes.length === 0 || !config?.enabled) {
+  if (!config?.enabled) {
     return <RouteMap {...props} />;
   }
+  const enabledReferences =
+    defaultReferenceLayerIds ??
+    layerRegistry
+      .providers("reference")
+      .filter(({ defaultEnabled }) => defaultEnabled)
+      .map(({ id }) => id);
   return (
     <AmapViewport
       {...props}
+      defaultBaseLayerId={defaultBaseLayerId}
+      defaultReferenceLayerIds={enabledReferences}
       keyValue={config.key}
+      layerRegistry={layerRegistry}
       serviceHost={config.serviceHost}
     />
   );
 }
 
-export const amapBasemapRenderer = defineBasemapRenderer({
-  id: "amap-jsapi",
-  displayName: "高德地图",
-  component: AmapBasemap,
-});
+export type AmapBasemapRendererOptions = Readonly<{
+  id?: string;
+  displayName?: string;
+  layerRegistry?: MapLayerProviderRegistry<
+    AmapMapLayerContext,
+    AmapLayer
+  >;
+  defaultBaseLayerId?: string;
+  defaultReferenceLayerIds?: readonly string[];
+}>;
+
+export function createAmapBasemapRenderer(
+  options: AmapBasemapRendererOptions = {},
+): BasemapRenderer {
+  const layerRegistry =
+    options.layerRegistry ?? defaultAmapMapLayerRegistry;
+  const defaultBaseLayerId =
+    options.defaultBaseLayerId ?? "amap-satellite";
+  const baseProvider = layerRegistry.require(defaultBaseLayerId);
+  if (baseProvider.kind !== "base") {
+    throw new TypeError("AMAP_BASE_LAYER_PROVIDER_REQUIRED");
+  }
+  const defaultReferenceLayerIds =
+    options.defaultReferenceLayerIds ??
+    layerRegistry
+      .providers("reference")
+      .filter(({ defaultEnabled }) => defaultEnabled)
+      .map(({ id }) => id);
+  defaultReferenceLayerIds.forEach((id) => {
+    if (layerRegistry.require(id).kind !== "reference") {
+      throw new TypeError("AMAP_REFERENCE_LAYER_PROVIDER_REQUIRED");
+    }
+  });
+
+  function ConfiguredAmapBasemap(props: BasemapViewportProps) {
+    return (
+      <AmapBasemap
+        {...props}
+        defaultBaseLayerId={defaultBaseLayerId}
+        defaultReferenceLayerIds={defaultReferenceLayerIds}
+        layerRegistry={layerRegistry}
+      />
+    );
+  }
+
+  return defineBasemapRenderer({
+    id: options.id ?? "amap-jsapi",
+    displayName: options.displayName ?? "高德地图",
+    component: ConfiguredAmapBasemap,
+  });
+}
+
+export const amapBasemapRenderer = createAmapBasemapRenderer();

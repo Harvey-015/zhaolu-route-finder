@@ -259,7 +259,7 @@ function staticHeaders(pathname: string): Headers {
       STATIC_CONTENT_TYPES[extname(pathname).toLowerCase()] ??
       "application/octet-stream",
     "permissions-policy":
-      "camera=(), geolocation=(), microphone=()",
+      "camera=(), geolocation=(self), microphone=()",
     "referrer-policy": "strict-origin-when-cross-origin",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",

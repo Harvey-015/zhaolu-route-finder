@@ -20,6 +20,16 @@ import {
   BasemapRendererRegistry,
   defineBasemapRenderer,
 } from "../web/src/basemap.ts";
+import {
+  defineMapLayerProvider,
+  MapLayerProviderRegistry,
+} from "../web/src/mapLayers.ts";
+import {
+  amapSatelliteLayerProvider,
+  amapStandardLayerProvider,
+  defaultAmapMapLayerRegistry,
+  type AmapNamespace,
+} from "../web/src/amapLayers.ts";
 import { loadWebMapConfig } from "../web/src/mapConfig.ts";
 import {
   createAnonymousSession,
@@ -37,6 +47,8 @@ import { DELIVERY_TEST_ROUTE } from "./fixtures/delivery.ts";
 
 const FORM: RouteFormState = {
   startQuery: "  杭州西湖  ",
+  startPoint: null,
+  requiredStops: [],
   mode: "cycling",
   distanceKilometers: 8.25,
   greenery: 0.8,
@@ -95,6 +107,44 @@ test("buildPlanRequest normalizes form values for the API", () => {
     },
     maxResults: 2,
   });
+});
+
+test("buildPlanRequest accepts a browser WGS84 point and required stops", () => {
+  assert.deepEqual(
+    buildPlanRequest(
+      {
+        ...FORM,
+        startQuery: "我的当前位置",
+        startPoint: { longitude: 120.15, latitude: 30.25 },
+        requiredStops: ["太子湾公园", "杭州植物园"],
+      },
+      "web-point-1",
+    ),
+    {
+      schemaVersion: "1",
+      requestId: "web-point-1",
+      start: {
+        kind: "point",
+        longitude: 120.15,
+        latitude: 30.25,
+        crs: "WGS84",
+        label: "我的当前位置",
+      },
+      mode: "cycling",
+      targetDistanceMeters: 8_250,
+      preferences: {
+        greenery: 0.8,
+        waterfront: 0.6,
+        lowTraffic: 0.4,
+        comfort: 0,
+      },
+      requiredStops: [
+        { kind: "query", query: "太子湾公园" },
+        { kind: "query", query: "杭州植物园" },
+      ],
+      maxResults: 2,
+    },
+  );
 });
 
 test("distance limits stay consistent when switching activity mode", () => {
@@ -185,7 +235,7 @@ test("planRoutes rejects a malformed successful response", async () => {
 test("shared search parameters are bounded and round-trip without geometry", () => {
   const defaults = routeFormFromSearch("");
   const form = routeFormFromSearch(
-    "?start=%E8%A5%BF%E6%B9%96&mode=cycling&distance=999&greenery=-1&waterfront=0.4&lowTraffic=0.6",
+    "?start=%E8%A5%BF%E6%B9%96&stop=%E5%A4%AA%E5%AD%90%E6%B9%BE&stop=%E6%A4%8D%E7%89%A9%E5%9B%AD&mode=cycling&distance=999&greenery=-1&waterfront=0.4&lowTraffic=0.6",
   );
   const url = new URL(
     createRouteShareUrl(form, "https://example.com/routes?old=1#map"),
@@ -197,9 +247,28 @@ test("shared search parameters are bounded and round-trip without geometry", () 
   assert.equal(form.mode, "cycling");
   assert.equal(form.distanceKilometers, 50);
   assert.equal(form.greenery, 0);
+  assert.deepEqual(form.requiredStops, ["太子湾", "植物园"]);
   assert.equal(url.hash, "");
   assert.equal(url.searchParams.get("distance"), "50");
+  assert.deepEqual(url.searchParams.getAll("stop"), ["太子湾", "植物园"]);
   assert.equal(url.searchParams.has("geometry"), false);
+});
+
+test("sharing a located start omits precise coordinates", () => {
+  const url = new URL(
+    createRouteShareUrl(
+      {
+        ...FORM,
+        startQuery: "我的当前位置",
+        startPoint: { longitude: 120.15, latitude: 30.25 },
+      },
+      "https://example.com/routes",
+    ),
+  );
+  assert.equal(url.searchParams.get("location"), "required");
+  assert.equal(url.searchParams.has("start"), false);
+  assert.equal(url.search.includes("120.15"), false);
+  assert.equal(routeFormFromSearch(url.search).startQuery, "");
 });
 
 test("routeExport enforces the delivery policy advertised by the API", () => {
@@ -270,6 +339,67 @@ test("basemap renderers can be registered and selected by id", () => {
   assert.throws(
     () => new BasemapRendererRegistry([renderer, renderer]),
     /BASEMAP_RENDERER_DUPLICATE/,
+  );
+});
+
+test("base and reference map layer providers share one extension registry", () => {
+  const base = defineMapLayerProvider<{}, string>({
+    id: "example-satellite",
+    displayName: "Example satellite",
+    kind: "base",
+    attribution: "Example imagery",
+    coordinateSystem: "WGS84",
+    createLayers: () => ["satellite"],
+  });
+  const reference = defineMapLayerProvider<{}, string>({
+    id: "example-terrain",
+    displayName: "Example terrain",
+    kind: "reference",
+    attribution: "Example terrain data",
+    coordinateSystem: "WGS84",
+    defaultEnabled: true,
+    createLayers: () => ["terrain"],
+  });
+  const registry = new MapLayerProviderRegistry([base, reference]);
+
+  assert.deepEqual(registry.ids("base"), ["example-satellite"]);
+  assert.deepEqual(registry.ids("reference"), ["example-terrain"]);
+  assert.equal(registry.require("example-terrain").defaultEnabled, true);
+  assert.throws(
+    () => new MapLayerProviderRegistry([base, base]),
+    /MAP_LAYER_PROVIDER_DUPLICATE/,
+  );
+});
+
+test("the default AMap profile starts with satellite plus road net", () => {
+  class StandardLayer {
+    readonly kind = "standard";
+    static readonly Satellite = class SatelliteLayer {
+      readonly kind = "satellite";
+    };
+    static readonly RoadNet = class RoadNetLayer {
+      readonly kind = "road-net";
+    };
+  }
+  const AMap = {
+    TileLayer: StandardLayer,
+  } as unknown as AmapNamespace;
+
+  assert.deepEqual(defaultAmapMapLayerRegistry.ids("base"), [
+    "amap-satellite",
+    "amap-standard",
+  ]);
+  assert.deepEqual(
+    amapSatelliteLayerProvider
+      .createLayers({ AMap })
+      .map((layer) => layer.kind),
+    ["satellite", "road-net"],
+  );
+  assert.deepEqual(
+    amapStandardLayerProvider
+      .createLayers({ AMap })
+      .map((layer) => layer.kind),
+    ["standard"],
   );
 });
 

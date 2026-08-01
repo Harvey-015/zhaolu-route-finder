@@ -60,7 +60,7 @@ function looksLikePlaceholder(value: string): boolean {
   );
 }
 
-function scanFile(
+export function scanSecurityFile(
   path: string,
   content: string,
 ): SecurityGateViolation[] {
@@ -152,7 +152,7 @@ export function runSecurityGate(options: Readonly<{
   const files =
     options.files ?? trackedTextFiles(resolve(options.root ?? process.cwd()));
   const violations = [...files.entries()].flatMap(([path, content]) =>
-    scanFile(path, content),
+    scanSecurityFile(path, content),
   );
   violations.push(...deploymentViolations(files));
   violations.sort((left, right) =>

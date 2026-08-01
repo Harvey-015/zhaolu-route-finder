@@ -17,12 +17,23 @@ import {
   rankWorldCoverAnchors,
 } from "./analysis.ts";
 import { CogWorldCoverRasterSource } from "./cogSource.ts";
-import type { WorldCoverRasterSource } from "./rasterSource.ts";
+import type {
+  WorldCoverGrid,
+  WorldCoverGridRequest,
+  WorldCoverRasterSource,
+} from "./rasterSource.ts";
 
 const SOURCE_VERSION = "2021-v200";
 const MAX_GRID_DIMENSION = 320;
 const MINIMUM_CELL_SIZE_METERS = 24;
 const ROUTE_BUFFER_METERS = 180;
+const REQUEST_GRID_TTL_MS = 60_000;
+const MAX_REQUEST_GRIDS = 64;
+
+type RequestGridEntry = Readonly<{
+  createdAt: number;
+  promise: Promise<WorldCoverGrid>;
+}>;
 
 export type WorldCoverSceneryProviderOptions = Readonly<{
   rasterSource?: WorldCoverRasterSource;
@@ -43,6 +54,7 @@ export class WorldCoverSceneryProvider
   private readonly sourceVersion: string;
   private readonly maxGridDimension: number;
   private readonly minimumCellSizeMeters: number;
+  private readonly requestGrids = new Map<string, RequestGridEntry>();
 
   constructor(options: WorldCoverSceneryProviderOptions = {}) {
     this.sourceVersion = options.sourceVersion ?? SOURCE_VERSION;
@@ -77,6 +89,33 @@ export class WorldCoverSceneryProvider
       });
   }
 
+  private gridForRequest(
+    request: WorldCoverGridRequest,
+    context: ProviderCallContext,
+  ): Promise<WorldCoverGrid> {
+    const now = Date.now();
+    for (const [requestId, entry] of this.requestGrids) {
+      if (entry.createdAt + REQUEST_GRID_TTL_MS <= now) {
+        this.requestGrids.delete(requestId);
+      }
+    }
+    const existing = this.requestGrids.get(context.requestId);
+    if (existing) return existing.promise;
+
+    const promise = this.rasterSource.readGrid(request, context);
+    const entry = { createdAt: now, promise };
+    this.requestGrids.set(context.requestId, entry);
+    void promise.catch(() => undefined);
+    while (this.requestGrids.size > MAX_REQUEST_GRIDS) {
+      const oldestRequestId = this.requestGrids.keys().next().value as
+        | string
+        | undefined;
+      if (oldestRequestId === undefined) break;
+      this.requestGrids.delete(oldestRequestId);
+    }
+    return promise;
+  }
+
   async findAnchors(
     request: Readonly<{
       origin: Wgs84Point;
@@ -101,7 +140,7 @@ export class WorldCoverSceneryProvider
       this.maxGridDimension,
       this.minimumCellSizeMeters,
     );
-    const grid = await this.rasterSource.readGrid(
+    const grid = await this.gridForRequest(
       {
         bounds,
         ...dimensions,
@@ -158,23 +197,27 @@ export class WorldCoverSceneryProvider
       this.maxGridDimension,
       this.minimumCellSizeMeters,
     );
-    const grid = await this.rasterSource.readGrid(
-      {
-        bounds,
-        ...dimensions,
-      },
-      context,
-    );
-    return new Map(
-      request.routes.map((route) => [
-        route.id,
-        analyzeRouteWithWorldCover(
-          route,
-          grid,
-          this.id,
-          this.sourceVersion,
-        ),
-      ]),
-    );
+    try {
+      const grid = await this.gridForRequest(
+        {
+          bounds,
+          ...dimensions,
+        },
+        context,
+      );
+      return new Map(
+        request.routes.map((route) => [
+          route.id,
+          analyzeRouteWithWorldCover(
+            route,
+            grid,
+            this.id,
+            this.sourceVersion,
+          ),
+        ]),
+      );
+    } finally {
+      this.requestGrids.delete(context.requestId);
+    }
   }
 }

@@ -1,3 +1,4 @@
+export * from "./algorithms.ts";
 export * from "./candidateGeneration.ts";
 export * from "./coordinates.ts";
 export * from "./diversity.ts";

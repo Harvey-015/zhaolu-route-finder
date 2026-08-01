@@ -1,5 +1,8 @@
 # 封闭测试与公测发布清单
 
+代码仓库从 Private 转为 Public 的独立步骤见
+[`docs/OPEN_SOURCE_RELEASE.md`](OPEN_SOURCE_RELEASE.md)。仓库公开不代表产品发布门禁已经通过。
+
 ## 当前结论
 
 仓库级架构、部署基线、隐私能力、运行保障和发布门禁已经具备；真实环境尚未创建和验收时，

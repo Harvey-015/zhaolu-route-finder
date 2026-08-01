@@ -3,6 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "description": "Provider-neutral scenic route recommendation core",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Harvey-015/zhaolu-route-finder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Harvey-015/zhaolu-route-finder/issues"
+  },
+  "homepage": "https://github.com/Harvey-015/zhaolu-route-finder#readme",
+  "keywords": [
+    "route-planning",
+    "scenic-route",
+    "running",
+    "cycling",
+    "gis",
+    "typescript"
+  ],
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
@@ -19,6 +36,7 @@
     "load:staging": "node --experimental-strip-types scripts/load-test.ts",
     "preview:web": "vite preview --config vite.config.ts",
     "release:check": "node --experimental-strip-types scripts/release-readiness.ts",
+    "security:history": "node --experimental-strip-types scripts/history-security-gate.ts",
     "security:static": "node --experimental-strip-types scripts/security-gate.ts",
     "smoke:api": "node --experimental-strip-types scripts/smoke-server-api.ts",
     "smoke:amap": "node --experimental-strip-types scripts/smoke-amap.ts",

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runHistorySecurityGate } from "../scripts/history-security-gate.ts";
 import { runSecurityGate } from "../scripts/security-gate.ts";
 
 function secureFiles(): Map<string, string> {
@@ -72,4 +73,36 @@ test("reports credential material and weakened deployment invariants", () => {
       "WORKFLOW_PERMISSIONS_MISSING",
     ].sort(),
   );
+});
+
+test("scans historical blobs without exposing secret values", () => {
+  const result = runHistorySecurityGate({
+    entries: [
+      {
+        objectId: "safe-object",
+        path: ".env.example",
+        content: "AMAP_WEB_SERVICE_KEY=<placeholder>\n",
+      },
+      {
+        objectId: "leaked-object",
+        path: "old-config.ts",
+        content: [
+          "AMAP_WEB_SERVICE_KEY",
+          '=\"',
+          "0123456789abcdef0123456789abcdef",
+          '\"',
+        ].join(""),
+      },
+    ],
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.scannedBlobCount, 2);
+  assert.deepEqual(result.violations, [
+    {
+      code: "LITERAL_SECRET_ASSIGNMENT",
+      path: "old-config.ts",
+      objectId: "leaked-object",
+    },
+  ]);
+  assert.equal(JSON.stringify(result).includes("0123456789abcdef"), false);
 });

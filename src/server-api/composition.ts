@@ -7,14 +7,61 @@ import { WorldCoverSceneryProvider } from "../adapters/worldcover/sceneryProvide
 import { generateDirectionalCandidates } from "../route-recommendation/candidateGeneration.ts";
 import { selectDiverseRoutes } from "../route-recommendation/diversity.ts";
 import { findScenicRoutes } from "../route-recommendation/findScenicRoutes.ts";
-import type { FindScenicRoutesLimits } from "../route-recommendation/ports.ts";
+import {
+  defineRecommendationAlgorithm,
+  type RecommendationAlgorithmProfile,
+} from "../route-recommendation/algorithms.ts";
+import type {
+  FindScenicRoutesLimits,
+  PlaceProvider,
+  RouteProvider,
+  SceneryProvider,
+} from "../route-recommendation/ports.ts";
 import { ScenicScoreV1 } from "../route-recommendation/scoring.ts";
 import type { PlanScenicRoutes } from "./handler.ts";
+
+export const defaultRecommendationAlgorithm =
+  defineRecommendationAlgorithm({
+    id: "scenic-route",
+    version: "1",
+    displayName: "风景环线推荐 v1",
+    candidateGenerationStrategy: generateDirectionalCandidates,
+    scoringPolicy: new ScenicScoreV1(),
+    routeSelectionStrategy: selectDiverseRoutes,
+  });
+
+export type RoutePlannerOptions = Readonly<{
+  placeProvider: PlaceProvider;
+  routeProvider: RouteProvider;
+  sceneryProvider: SceneryProvider;
+  algorithm?: RecommendationAlgorithmProfile;
+  limits?: Partial<FindScenicRoutesLimits>;
+}>;
+
+export function createRoutePlanner(
+  options: RoutePlannerOptions,
+): PlanScenicRoutes {
+  const algorithm =
+    options.algorithm ?? defaultRecommendationAlgorithm;
+  return (request, signal) =>
+    findScenicRoutes(request, {
+      placeProvider: options.placeProvider,
+      routeProvider: options.routeProvider,
+      sceneryProvider: options.sceneryProvider,
+      scoringPolicy: algorithm.scoringPolicy,
+      candidateGenerationStrategy:
+        algorithm.candidateGenerationStrategy,
+      routeSelectionStrategy: algorithm.routeSelectionStrategy,
+      signal,
+      limits: options.limits,
+    });
+}
 
 export type ProductionRoutePlannerOptions = Readonly<{
   amapWebServiceKey: string;
   amapCity?: string;
   amapMaxHttpAttemptsPerMinute?: number;
+  algorithm?: RecommendationAlgorithmProfile;
   limits?: Partial<FindScenicRoutesLimits>;
 }>;
 
@@ -30,17 +77,12 @@ export function createProductionRoutePlanner(
   });
   const routeProvider = new AmapRouteProvider(client);
   const sceneryProvider = new WorldCoverSceneryProvider();
-  const scoringPolicy = new ScenicScoreV1();
 
-  return (request, signal) =>
-    findScenicRoutes(request, {
-      placeProvider,
-      routeProvider,
-      sceneryProvider,
-      scoringPolicy,
-      candidateGenerationStrategy: generateDirectionalCandidates,
-      routeSelectionStrategy: selectDiverseRoutes,
-      signal,
-      limits: options.limits,
-    });
+  return createRoutePlanner({
+    placeProvider,
+    routeProvider,
+    sceneryProvider,
+    algorithm: options.algorithm,
+    limits: options.limits,
+  });
 }

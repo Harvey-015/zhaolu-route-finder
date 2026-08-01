@@ -99,7 +99,7 @@ function responseHeaders(requestId: string): Headers {
     "cache-control": "no-store",
     "content-type": "application/json; charset=utf-8",
     "permissions-policy":
-      "camera=(), geolocation=(), microphone=()",
+      "camera=(), geolocation=(self), microphone=()",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",

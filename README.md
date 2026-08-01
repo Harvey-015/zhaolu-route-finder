@@ -4,6 +4,9 @@
 
 项目目标不是重做底层路线引擎，而是在地图服务提供的真实可通行道路上，结合环境特征、用户偏好和路线多样性，推荐距离合适且风景更好的路线。
 
+[![CI](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 ## 当前状态
 
 七个阶段的仓库实现已经完成：
@@ -12,7 +15,7 @@
 - WGS-84 与 GCJ-02 类型边界；
 - `findScenicRoutes` 应用用例；
 - 可替换的地点、路线、环境和评分端口；
-- 可替换的候选生成与路线选择纯策略；
+- 可替换的候选生成、评分与路线选择纯策略，以及版本化算法 Profile 注册表；
 - Fake Provider 和完全离线的核心测试；
 - 调用预算、并发、取消、降级和稳定错误契约。
 - 高德地点解析与步行、骑行路线 Adapter；
@@ -23,8 +26,9 @@
 - 高德离线契约测试和受控在线冒烟；
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
-- React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
-- 高德 JS API 2.0 底图、服务端安全密钥代理和无 Key SVG 降级；
+- React Web UI、当前位置、最多三个必经点、路线条件和结果比较；
+- 可注入 `BasemapRenderer` 与独立的 `MapLayerProvider` 注册表；
+- 高德 JS API 2.0 默认卫星图 + 路网、标准图切换、服务端安全密钥代理和无 Key SVG 降级；
 - 桌面和移动端浏览器验收；
 - 注册式 `RouteExporter`、`NavigationLinkProvider`，以及受 Provider
   policy 控制的 GPX、GeoJSON 和高德 URI 路线交付；
@@ -53,6 +57,11 @@ findScenicRoutes
   ├─ CandidateGenerationStrategy
   └─ RouteSelectionStrategy
 ```
+
+默认产品组合为：高德 JS API 地图渲染、高德卫星/标准底图、高德 POI 与路线规划、
+ESA WorldCover 环境分析、`scenic-route@1` 推荐算法，以及高德导航交接。地图渲染器、
+可见底图/参考图层、地点与道路 Provider、环境数据 Provider、推荐算法 Profile 和路线
+交付 Provider 均在组合根注册，可以分别替换，不要求修改路线核心或页面条件分支。
 
 核心代码只依赖内部 TypeScript 模型，不依赖 React、Next.js、Cloudflare、数据库或第三方地图 SDK。
 
@@ -84,6 +93,25 @@ pnpm run test:e2e
 
 `test:e2e` 会启动本地 Fixture API 与 Vite，并用 Chromium 验证路线生成、
 收藏和刷新恢复主流程；CI 会自动安装对应浏览器。
+
+## 参与开发
+
+欢迎提交缺陷修复、测试、文档，以及新的地图、路线、环境数据和推荐算法实现。开始前请阅读：
+
+- [贡献指南](CONTRIBUTING.md)
+- [社区行为准则](CODE_OF_CONDUCT.md)
+- [安全策略](SECURITY.md)
+- [支持范围](SUPPORT.md)
+- [项目治理](GOVERNANCE.md)
+- [公开路线图](ROADMAP.md)
+- [变更记录](CHANGELOG.md)
+- [开放源代码发布清单](docs/OPEN_SOURCE_RELEASE.md)
+
+新增能力时保持现有解耦边界：第三方 DTO、SDK 和网络调用留在 Adapter；核心只依赖内部模型和端口；Provider、地图图层和算法 Profile 通过组合根或注册表接入。较大的扩展先使用仓库中的 Provider Issue 模板讨论坐标系、许可证、额度、缓存和降级策略。
+
+## 许可证
+
+项目采用 [Apache License 2.0](LICENSE) 开源。第三方地图、卫星影像、路线和环境数据仍分别受对应 Provider 条款与数据许可证约束；代码许可证不替代这些授权。
 
 ## 下一阶段
 

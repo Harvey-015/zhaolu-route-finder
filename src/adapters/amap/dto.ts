@@ -24,6 +24,20 @@ export type AmapGeocodeResponseDto = AmapApiEnvelopeDto &
     geocodes: readonly AmapGeocodeDto[];
   }>;
 
+export type AmapPoiDto = Readonly<{
+  id?: string;
+  name: string;
+  address?: string;
+  location: string;
+  adcode?: string;
+}>;
+
+export type AmapPlaceTextResponseDto = AmapApiEnvelopeDto &
+  Readonly<{
+    count: string;
+    pois: readonly AmapPoiDto[];
+  }>;
+
 export type AmapRouteCostDto = Readonly<{
   duration?: string;
 }>;

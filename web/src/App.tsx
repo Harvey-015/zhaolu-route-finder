@@ -116,7 +116,7 @@ type SearchState =
 
 const ERROR_LABELS: Readonly<Record<string, string>> = {
   INVALID_REQUEST: "搜索条件有误，请检查后重试。",
-  PLACE_NOT_FOUND: "没有找到这个起点，请换一个更具体的地点。",
+  PLACE_NOT_FOUND: "没有找到这个地点，请检查起点或必经点后重试。",
   PLACE_PROVIDER_UNAVAILABLE: "地点服务暂时不可用。",
   ROUTE_PROVIDER_TIMEOUT: "路线计算超时，请稍后重试。",
   ROUTE_PROVIDER_QUOTA_EXCEEDED: "今日路线服务额度已用完。",
@@ -563,6 +563,10 @@ export function App({
   const [form, setForm] = useState<RouteFormState>(() =>
     routeFormFromSearch(window.location.search),
   );
+  const [requiredStopDraft, setRequiredStopDraft] = useState("");
+  const [locationStatus, setLocationStatus] = useState<
+    "idle" | "locating" | "located" | "denied" | "unavailable"
+  >("idle");
   const [search, setSearch] = useState<SearchState>({
     status: "idle",
   });
@@ -625,6 +629,60 @@ export function App({
     value: RouteFormState[Key],
   ) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const locateCurrentPosition = () => {
+    if (!("geolocation" in navigator)) {
+      setLocationStatus("unavailable");
+      return;
+    }
+    setLocationStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (
+          !Number.isFinite(coords.longitude) ||
+          !Number.isFinite(coords.latitude) ||
+          coords.longitude < -180 ||
+          coords.longitude > 180 ||
+          coords.latitude < -90 ||
+          coords.latitude > 90
+        ) {
+          setLocationStatus("unavailable");
+          return;
+        }
+        setForm((current) => ({
+          ...current,
+          startQuery: "我的当前位置",
+          startPoint: {
+            longitude: coords.longitude,
+            latitude: coords.latitude,
+          },
+        }));
+        setLocationStatus("located");
+      },
+      (error) => {
+        setLocationStatus(error.code === 1 ? "denied" : "unavailable");
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 30_000,
+        timeout: 10_000,
+      },
+    );
+  };
+
+  const addRequiredStop = () => {
+    const stop = requiredStopDraft.trim();
+    if (
+      !stop ||
+      stop.length > 200 ||
+      form.requiredStops.length >= 3 ||
+      form.requiredStops.includes(stop)
+    ) {
+      return;
+    }
+    updateForm("requiredStops", [...form.requiredStops, stop]);
+    setRequiredStopDraft("");
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -738,6 +796,9 @@ export function App({
 
   const shareSearch = async () => {
     const url = createRouteShareUrl(form, window.location.href);
+    const sharedNotice = form.startPoint
+      ? "搜索条件已分享；为保护隐私，精确当前位置未写入链接，接收者需要重新定位。"
+      : "搜索条件已分享。";
     try {
       if (navigator.share) {
         await navigator.share({
@@ -745,10 +806,14 @@ export function App({
           text: "用这组条件生成风景路线",
           url,
         });
-        setDeliveryNotice("搜索条件已分享。");
+        setDeliveryNotice(sharedNotice);
       } else {
         await navigator.clipboard.writeText(url);
-        setDeliveryNotice("搜索条件链接已复制。");
+        setDeliveryNotice(
+          form.startPoint
+            ? "链接已复制；精确当前位置未写入链接，打开后需要重新定位。"
+            : "搜索条件链接已复制。",
+        );
       }
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -889,15 +954,97 @@ export function App({
                 autoComplete="off"
                 id="start-query"
                 maxLength={200}
-                onChange={(event) =>
-                  updateForm("startQuery", event.target.value)
-                }
+                onChange={(event) => {
+                  setForm((current) => ({
+                    ...current,
+                    startQuery: event.target.value,
+                    startPoint: null,
+                  }));
+                  setLocationStatus("idle");
+                }}
                 placeholder="地点、地标或地址"
                 required
                 value={form.startQuery}
               />
+              <button
+                className="location-action"
+                disabled={locationStatus === "locating"}
+                onClick={locateCurrentPosition}
+                type="button"
+              >
+                {locationStatus === "locating"
+                  ? "定位中…"
+                  : locationStatus === "located"
+                    ? "已定位"
+                    : "用当前位置"}
+              </button>
               <span className="location-crs">WGS84</span>
             </div>
+            <p className="location-status" aria-live="polite">
+              {locationStatus === "located"
+                ? "仅在你生成路线时发送坐标；分享链接不会包含精确位置。"
+                : locationStatus === "denied"
+                  ? "定位权限未授权，可继续输入地点或在浏览器中允许定位。"
+                  : locationStatus === "unavailable"
+                    ? "暂时无法定位，请输入地点、地标或地址。"
+                    : "可输入地点，也可由浏览器获取一次当前位置。"}
+            </p>
+
+            <div className="required-stops-heading">
+              <label htmlFor="required-stop">必经点</label>
+              <span>{form.requiredStops.length}/3 · 可选</span>
+            </div>
+            <div className="required-stop-field">
+              <input
+                autoComplete="off"
+                id="required-stop"
+                maxLength={200}
+                onChange={(event) =>
+                  setRequiredStopDraft(event.target.value)
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addRequiredStop();
+                  }
+                }}
+                placeholder="公园入口、地标或地址"
+                value={requiredStopDraft}
+              />
+              <button
+                disabled={
+                  !requiredStopDraft.trim() ||
+                  form.requiredStops.length >= 3
+                }
+                onClick={addRequiredStop}
+                type="button"
+              >
+                添加
+              </button>
+            </div>
+            {form.requiredStops.length > 0 ? (
+              <div className="required-stop-list" aria-label="已添加必经点">
+                {form.requiredStops.map((stop, index) => (
+                  <span key={stop}>
+                    {index + 1}. {stop}
+                    <button
+                      aria-label={`移除必经点 ${stop}`}
+                      onClick={() =>
+                        updateForm(
+                          "requiredStops",
+                          form.requiredStops.filter(
+                            (candidate) => candidate !== stop,
+                          ),
+                        )
+                      }
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             <fieldset className="mode-fieldset">
               <legend>运动方式</legend>

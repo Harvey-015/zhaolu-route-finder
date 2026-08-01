@@ -35,11 +35,21 @@ export function routeFormFromSearch(
   const parameters = new URLSearchParams(search);
   const mode =
     parameters.get("mode") === "cycling" ? "cycling" : "running";
+  const locationMustBeSelected = parameters.get("location") === "required";
+  const requiredStops = parameters
+    .getAll("stop")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0 && value.length <= 200)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .slice(0, 3);
   return {
     ...INITIAL_ROUTE_FORM,
-    startQuery:
-      parameters.get("start")?.trim() ||
-      INITIAL_ROUTE_FORM.startQuery,
+    startQuery: locationMustBeSelected
+      ? ""
+      : parameters.get("start")?.trim() ||
+        INITIAL_ROUTE_FORM.startQuery,
+    startPoint: null,
+    requiredStops,
     mode,
     distanceKilometers: boundedNumber(
       parameters.get("distance"),
@@ -75,7 +85,14 @@ export function createRouteShareUrl(
   const url = new URL(currentUrl);
   url.search = "";
   url.hash = "";
-  url.searchParams.set("start", form.startQuery.trim());
+  if (form.startPoint) {
+    url.searchParams.set("location", "required");
+  } else {
+    url.searchParams.set("start", form.startQuery.trim());
+  }
+  form.requiredStops.forEach((stop) => {
+    url.searchParams.append("stop", stop.trim());
+  });
   url.searchParams.set("mode", form.mode);
   url.searchParams.set(
     "distance",
