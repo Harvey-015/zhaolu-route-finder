@@ -68,6 +68,7 @@ jobs:
           docker run --rm --entrypoint promtool \
             -v "${{ github.workspace }}/deploy/prometheus.rules.yaml:/etc/prometheus/zhaolu.rules.yaml:ro" \
             -v "${{ github.workspace }}/deploy/prometheus.example.yaml:/etc/prometheus/prometheus.yml:ro" \
+            -v "${{ github.workspace }}/tests/fixtures/prometheus-observability-token.txt:/run/secrets/zhaolu-observability-token:ro" \
             prom/prometheus:v3.12.0 check config /etc/prometheus/prometheus.yml
           docker run --rm --entrypoint promtool \
             -v "${{ github.workspace }}/deploy/prometheus.rules.yaml:/work/zhaolu.rules.yaml:ro" \

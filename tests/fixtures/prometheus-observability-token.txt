@@ -1,0 +1,1 @@
+promtool-validation-placeholder-not-a-secret
