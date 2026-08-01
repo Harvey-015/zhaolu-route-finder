@@ -9,6 +9,7 @@ const DEFAULT_BASE_URL = "https://restapi.amap.com";
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 100;
+const DEFAULT_MAX_ATTEMPTS_PER_MINUTE = 300;
 
 export type AmapFetch = (
   input: URL,
@@ -21,6 +22,8 @@ export type AmapWebServiceClientOptions = Readonly<{
   timeoutMs?: number;
   maxAttempts?: number;
   retryDelayMs?: number;
+  maxAttemptsPerMinute?: number;
+  now?: () => number;
   fetcher?: AmapFetch;
 }>;
 
@@ -30,7 +33,10 @@ export class AmapWebServiceClient {
   private readonly timeoutMs: number;
   private readonly maxAttempts: number;
   private readonly retryDelayMs: number;
+  private readonly maxAttemptsPerMinute: number;
+  private readonly now: () => number;
   private readonly fetcher: AmapFetch;
+  private attemptWindow = { count: 0, resetsAt: 0 };
 
   constructor(options: AmapWebServiceClientOptions) {
     const apiKey = options.apiKey.trim();
@@ -64,15 +70,50 @@ export class AmapWebServiceClient {
     if (!Number.isInteger(retryDelayMs) || retryDelayMs < 0) {
       throw new RangeError("AMAP_RETRY_DELAY_INVALID");
     }
+    const maxAttemptsPerMinute =
+      options.maxAttemptsPerMinute ??
+      DEFAULT_MAX_ATTEMPTS_PER_MINUTE;
+    if (
+      !Number.isInteger(maxAttemptsPerMinute) ||
+      maxAttemptsPerMinute < 1 ||
+      maxAttemptsPerMinute > 100_000
+    ) {
+      throw new RangeError("AMAP_GLOBAL_ATTEMPT_LIMIT_INVALID");
+    }
 
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.timeoutMs = timeoutMs;
     this.maxAttempts = maxAttempts;
     this.retryDelayMs = retryDelayMs;
+    this.maxAttemptsPerMinute = maxAttemptsPerMinute;
+    this.now = options.now ?? (() => Date.now());
     this.fetcher =
       options.fetcher ??
       ((input, init) => globalThis.fetch(input, init));
+  }
+
+  private consumeAttemptBudgets(
+    providerId: string,
+    context: ProviderCallContext,
+  ): void {
+    context.physicalCallBudget?.consume(providerId);
+    const now = this.now();
+    if (this.attemptWindow.resetsAt <= now) {
+      this.attemptWindow = {
+        count: 0,
+        resetsAt: now + 60_000,
+      };
+    }
+    if (this.attemptWindow.count >= this.maxAttemptsPerMinute) {
+      throw new ProviderError({
+        providerId,
+        code: "QUOTA_EXCEEDED",
+        message: "AMAP_GLOBAL_ATTEMPT_LIMIT_EXCEEDED",
+        retryable: false,
+      });
+    }
+    this.attemptWindow.count += 1;
   }
 
   async getJson(
@@ -156,6 +197,7 @@ export class AmapWebServiceClient {
         message: "AMAP_REQUEST_ABORTED",
       });
     }
+    this.consumeAttemptBudgets(providerId, context);
 
     const url = new URL(path, this.baseUrl);
     Object.entries(parameters).forEach(([name, value]) => {

@@ -32,7 +32,7 @@
 - 共享搜索条件和按路线实际距离重新规划；
 - 单进程生产运行时、Docker/Compose 和 GitHub Actions；
 - 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
-- 78 个自动化测试。
+- 覆盖核心、Provider、API、持久化和 Web 客户端的完整自动化测试集。
 
 服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
 实际生产发布仍需要外部容器平台、域名、TLS、Secret 注入和持久数据卷。
@@ -53,7 +53,8 @@ findScenicRoutes
 
 核心代码只依赖内部 TypeScript 模型，不依赖 React、Next.js、Cloudflare、数据库或第三方地图 SDK。
 
-高德基础设施代码位于 `src/adapters/amap`，只实现 `PlaceProvider` 和 `RouteProvider`，不会反向进入路线核心。
+高德基础设施代码位于 `src/adapters/amap`，实现 `PlaceProvider`、`RouteProvider`
+和高德导航交接；这些实现不会反向进入路线核心。
 
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
 Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
@@ -68,7 +69,12 @@ pnpm install
 pnpm run typecheck
 pnpm run test
 pnpm run build
+pnpm exec playwright install chromium
+pnpm run test:e2e
 ```
+
+`test:e2e` 会启动本地 Fixture API 与 Vite，并用 Chromium 验证路线生成、
+收藏和刷新恢复主流程；CI 会自动安装对应浏览器。
 
 ## 下一阶段
 

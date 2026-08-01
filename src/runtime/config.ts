@@ -7,10 +7,13 @@ export type RuntimeConfig = Readonly<{
   port: number;
   amapWebServiceKey: string;
   amapCity?: string;
+  amapMaxHttpAttemptsPerPlan: number;
+  amapMaxHttpAttemptsPerMinute: number;
   sessionSecret: string;
   observabilityToken: string;
   databasePath: string;
   staticRoot: string;
+  trustedProxyRanges: readonly string[];
   logLevel: RuntimeLogLevel;
   shutdownTimeoutMs: number;
   rateLimits: Readonly<{
@@ -59,6 +62,19 @@ function integer(
   return value;
 }
 
+function commaSeparatedList(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+): readonly string[] {
+  const raw = environment[name]?.trim();
+  if (!raw) return Object.freeze([]);
+  const values = raw.split(",").map((value) => value.trim());
+  if (values.some((value) => !value)) {
+    throw new RangeError(`${name}_INVALID`);
+  }
+  return Object.freeze(values);
+}
+
 export function loadRuntimeConfig(
   environment: NodeJS.ProcessEnv,
   workingDirectory = process.cwd(),
@@ -77,6 +93,20 @@ export function loadRuntimeConfig(
     ...(environment.AMAP_CITY?.trim()
       ? { amapCity: environment.AMAP_CITY.trim() }
       : {}),
+    amapMaxHttpAttemptsPerPlan: integer(
+      environment,
+      "AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN",
+      24,
+      1,
+      1_000,
+    ),
+    amapMaxHttpAttemptsPerMinute: integer(
+      environment,
+      "AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE",
+      300,
+      1,
+      100_000,
+    ),
     sessionSecret: requiredSecret(
       environment,
       "ZHAOLU_SESSION_SECRET",
@@ -93,6 +123,10 @@ export function loadRuntimeConfig(
     staticRoot: resolve(
       workingDirectory,
       environment.ZHAOLU_STATIC_ROOT?.trim() || "web-dist",
+    ),
+    trustedProxyRanges: commaSeparatedList(
+      environment,
+      "ZHAOLU_TRUSTED_PROXY_RANGES",
     ),
     logLevel,
     shutdownTimeoutMs: integer(

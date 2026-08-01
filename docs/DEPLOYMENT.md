@@ -29,6 +29,13 @@ pnpm run start:production
 默认监听 `0.0.0.0:8787`，静态文件来自 `web-dist`，数据库为
 `data/zhaolu.sqlite`。
 
+生产环境位于反向代理或负载均衡器后时，必须把代理实际使用的源地址或 CIDR 写入
+`ZHAOLU_TRUSTED_PROXY_RANGES`，例如 `10.20.0.0/16,fd00:20::/64`。默认值为空，
+此时服务忽略所有 `X-Forwarded-For`，只使用 TCP 对端地址。不要填写整个公网或
+未经平台确认的宽泛网段；直连服务端的来源必须无法访问受信代理入口。服务会从
+右向左跳过受信代理，只采用距离服务最近的非受信地址作为限流身份，客户端伪造的
+更早转发地址不会扩大额度。非法地址或 CIDR 会阻止生产进程启动。
+
 ## 容器
 
 ```powershell
@@ -70,6 +77,12 @@ Authorization: Bearer <ZHAOLU_OBSERVABILITY_TOKEN>
 - 匿名会话：每客户端每小时 10 次；
 - 收藏/反馈：每客户端每分钟 120 次。
 
+高德物理 HTTP 尝试另有两层硬上限：单次规划默认 24 次、整个进程默认每分钟
+300 次；每次重试和每个拆分路段都实际消费一次。分别通过
+`AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN` 和 `AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE`
+调整。达到上限后会在发出下一个高德请求前失败，避免逻辑 Provider 调用数掩盖
+拆分路段和重试产生的真实配额消耗。
+
 可用 `.env.example` 中的变量调整。响应为稳定的 `RATE_LIMITED` 错误，并携带
 `Retry-After`。
 
@@ -80,6 +93,9 @@ Redis，把 `UserDataStore` 替换为 PostgreSQL/PostGIS；不要直接运行多
 ## 数据、备份和过期
 
 启动时和每小时清理过期会话、收藏和反馈。数据卷需要平台快照或停机文件备份。
+SQLite 使用 `PRAGMA user_version` 和顺序事务 migration；旧的未版本化数据库会在
+首次启动时升级为 schema v1，版本高于当前程序支持范围时会拒绝启动。每次发布前
+仍必须先做数据卷快照；migration 负责原子升级和失败回滚，不代替可恢复备份。
 恢复演练应确认：
 
 1. SQLite 文件能打开且 `/api/v1/ready` 返回 `ready`；

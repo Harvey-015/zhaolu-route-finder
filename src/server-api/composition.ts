@@ -14,6 +14,7 @@ import type { PlanScenicRoutes } from "./handler.ts";
 export type ProductionRoutePlannerOptions = Readonly<{
   amapWebServiceKey: string;
   amapCity?: string;
+  amapMaxHttpAttemptsPerMinute?: number;
   limits?: Partial<FindScenicRoutesLimits>;
 }>;
 
@@ -22,6 +23,7 @@ export function createProductionRoutePlanner(
 ): PlanScenicRoutes {
   const client = new AmapWebServiceClient({
     apiKey: options.amapWebServiceKey,
+    maxAttemptsPerMinute: options.amapMaxHttpAttemptsPerMinute,
   });
   const placeProvider = new AmapPlaceProvider(client, {
     city: options.amapCity,

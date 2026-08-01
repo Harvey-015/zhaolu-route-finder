@@ -1,3 +1,19 @@
+const ERROR_RESPONSE_REFERENCE = {
+  $ref: "#/components/responses/ErrorResponse",
+} as const;
+
+const RUNTIME_ERROR_RESPONSES = {
+  "429": ERROR_RESPONSE_REFERENCE,
+  "500": ERROR_RESPONSE_REFERENCE,
+  "503": ERROR_RESPONSE_REFERENCE,
+} as const;
+
+const BODY_ERROR_RESPONSES = {
+  "413": ERROR_RESPONSE_REFERENCE,
+  "415": ERROR_RESPONSE_REFERENCE,
+  ...RUNTIME_ERROR_RESPONSES,
+} as const;
+
 export const SERVER_API_OPENAPI_DOCUMENT = {
   openapi: "3.1.0",
   info: {
@@ -146,6 +162,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
               },
             },
           },
+          ...RUNTIME_ERROR_RESPONSES,
         },
       },
     },
@@ -160,11 +177,27 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "401": {
             $ref: "#/components/responses/ErrorResponse",
           },
+          ...RUNTIME_ERROR_RESPONSES,
         },
       },
       post: {
         operationId: "saveRoute",
         security: [{ bearerSession: [] }],
+        parameters: [
+          {
+            in: "header",
+            name: "Idempotency-Key",
+            required: false,
+            description:
+              "User-scoped key that makes repeated save attempts return the original record.",
+            schema: {
+              type: "string",
+              minLength: 1,
+              maxLength: 128,
+              pattern: "^[A-Za-z0-9._:-]+$",
+            },
+          },
+        ],
         requestBody: {
           required: true,
           content: {
@@ -189,6 +222,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "403": {
             $ref: "#/components/responses/ErrorResponse",
           },
+          ...BODY_ERROR_RESPONSES,
         },
       },
     },
@@ -212,6 +246,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "404": {
             $ref: "#/components/responses/ErrorResponse",
           },
+          ...RUNTIME_ERROR_RESPONSES,
         },
       },
     },
@@ -248,6 +283,7 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
           "404": {
             $ref: "#/components/responses/ErrorResponse",
           },
+          ...BODY_ERROR_RESPONSES,
         },
       },
     },
@@ -263,6 +299,20 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
     responses: {
       ErrorResponse: {
         description: "Stable error envelope.",
+        headers: {
+          "Retry-After": {
+            description: "Seconds before a rate-limited request may retry.",
+            schema: { type: "integer", minimum: 1 },
+          },
+          "WWW-Authenticate": {
+            description: "Bearer challenge returned for invalid sessions.",
+            schema: { type: "string" },
+          },
+          Allow: {
+            description: "Methods accepted by a method-mismatch response.",
+            schema: { type: "string" },
+          },
+        },
         content: {
           "application/json": {
             schema: {

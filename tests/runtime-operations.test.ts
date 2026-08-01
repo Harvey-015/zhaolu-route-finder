@@ -72,6 +72,18 @@ test("loads validated production config without exposing secret values", () => {
   assert.equal(config.port, 9090);
   assert.equal(config.host, "0.0.0.0");
   assert.equal(config.rateLimits.planPerMinute, 12);
+  assert.equal(config.amapMaxHttpAttemptsPerPlan, 24);
+  assert.equal(config.amapMaxHttpAttemptsPerMinute, 300);
+  assert.deepEqual(config.trustedProxyRanges, []);
+  assert.deepEqual(
+    loadRuntimeConfig(
+      environment({
+        ZHAOLU_TRUSTED_PROXY_RANGES:
+          "10.0.0.0/8, 2001:db8::/32",
+      }),
+    ).trustedProxyRanges,
+    ["10.0.0.0/8", "2001:db8::/32"],
+  );
   assert.throws(
     () =>
       loadRuntimeConfig(
@@ -83,6 +95,88 @@ test("loads validated production config without exposing secret values", () => {
     () =>
       loadRuntimeConfig(environment({ PORT: "70000" })),
     /PORT_INVALID/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({
+          ZHAOLU_TRUSTED_PROXY_RANGES: "127.0.0.1,,10.0.0.0/8",
+        }),
+      ),
+    /ZHAOLU_TRUSTED_PROXY_RANGES_INVALID/,
+  );
+});
+
+function rateLimitedSessionHandler() {
+  return createServerApi({
+    planRoutes: async () => {
+      throw new Error("not used");
+    },
+    rateLimiter: new FixedWindowRateLimiter({
+      limits: {
+        plan: { maximum: 1, windowMs: 60_000 },
+        session: { maximum: 1, windowMs: 60_000 },
+        "user-data": { maximum: 1, windowMs: 60_000 },
+      },
+    }),
+  });
+}
+
+test("direct clients cannot spoof forwarded addresses to bypass limits", async () => {
+  const server = createNodeApiServer(rateLimitedSessionHandler());
+  try {
+    const port = await listen(server);
+    const endpoint = `http://127.0.0.1:${port}/api/v1/session`;
+    const first = await fetch(endpoint, {
+      method: "POST",
+      headers: { "x-forwarded-for": "198.51.100.1" },
+    });
+    const second = await fetch(endpoint, {
+      method: "POST",
+      headers: { "x-forwarded-for": "198.51.100.2" },
+    });
+
+    assert.equal(first.status, 503);
+    assert.equal(second.status, 429);
+  } finally {
+    if (server.listening) await close(server);
+  }
+});
+
+test("trusted proxies separate clients and ignore spoofed earlier hops", async () => {
+  const server = createNodeApiServer(rateLimitedSessionHandler(), {
+    trustedProxyRanges: ["127.0.0.1/32"],
+  });
+  try {
+    const port = await listen(server);
+    const endpoint = `http://127.0.0.1:${port}/api/v1/session`;
+    const request = (forwardedFor: string) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: { "x-forwarded-for": forwardedFor },
+      });
+
+    assert.equal(
+      (await request("198.51.100.1, 203.0.113.1")).status,
+      503,
+    );
+    assert.equal(
+      (await request("198.51.100.2, 203.0.113.1")).status,
+      429,
+    );
+    assert.equal((await request("203.0.113.2")).status, 503);
+  } finally {
+    if (server.listening) await close(server);
+  }
+});
+
+test("trusted proxy ranges fail closed when configuration is invalid", () => {
+  assert.throws(
+    () =>
+      createNodeApiServer(rateLimitedSessionHandler(), {
+        trustedProxyRanges: ["not-an-address"],
+      }),
+    /TRUSTED_PROXY_RANGE_INVALID/,
   );
 });
 
@@ -219,6 +313,10 @@ test("unified Node runtime serves secure static files and protected metrics", as
     const origin = `http://127.0.0.1:${port}`;
     const home = await fetch(`${origin}/?token=do-not-log`);
     const asset = await fetch(`${origin}/assets/app.js`);
+    const missingAsset = await fetch(
+      `${origin}/assets/missing-audit.js`,
+    );
+    const spaRoute = await fetch(`${origin}/routes/example`);
     const ready = await fetch(`${origin}/api/v1/ready`);
     const unauthorized = await fetch(`${origin}/internal/metrics`);
     const authorized = await fetch(`${origin}/internal/metrics`, {
@@ -242,6 +340,13 @@ test("unified Node runtime serves secure static files and protected metrics", as
       asset.headers.get("cache-control"),
       "public, max-age=31536000, immutable",
     );
+    assert.equal(missingAsset.status, 404);
+    assert.equal(
+      missingAsset.headers.get("content-type"),
+      "text/javascript; charset=utf-8",
+    );
+    assert.equal(spaRoute.status, 200);
+    assert.match(await spaRoute.text(), /<title>找路<\/title>/);
     assert.equal(ready.status, 200);
     assert.equal(unauthorized.status, 401);
     assert.equal(authorized.status, 200);

@@ -25,6 +25,7 @@ export type SavedRouteSummary = Readonly<{
 export type SavedRouteRecord = SavedRouteSummary &
   Readonly<{
     userId: string;
+    idempotencyKey: string | null;
     request: PlanRoutesApiRequest;
     route: ApiRecommendedRoute | null;
     policy: RouteDeliveryPolicy;
@@ -51,6 +52,11 @@ export interface UserDataStore {
   createSession(session: UserSession): void;
   hasSession(userId: string, now: number): boolean;
   saveRoute(record: SavedRouteRecord): void;
+  findSavedRouteByIdempotencyKey(
+    userId: string,
+    idempotencyKey: string,
+    now: number,
+  ): SavedRouteSummary | null;
   listSavedRoutes(
     userId: string,
     now: number,

@@ -65,12 +65,19 @@ export async function startProductionRuntime(
   const planRoutes = createProductionRoutePlanner({
     amapWebServiceKey: config.amapWebServiceKey,
     amapCity: config.amapCity,
+    amapMaxHttpAttemptsPerMinute:
+      config.amapMaxHttpAttemptsPerMinute,
+    limits: {
+      maxProviderHttpAttempts:
+        config.amapMaxHttpAttemptsPerPlan,
+    },
   });
   const handler = createServerApi({
     planRoutes,
     deliveryPolicyResolver: resolveRouteDeliveryPolicy,
     userData,
     rateLimiter,
+    eventLogger: logger,
     readinessCheck: async () => ({
       database: store.isHealthy() ? "ok" : "error",
       staticFiles: existsSync(
@@ -85,6 +92,7 @@ export async function startProductionRuntime(
     logger,
     metrics,
     observabilityToken: config.observabilityToken,
+    trustedProxyRanges: config.trustedProxyRanges,
   });
   let closing: Promise<void> | null = null;
 

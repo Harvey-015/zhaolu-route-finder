@@ -16,6 +16,55 @@ export type AnonymousSession = Readonly<{
   expiresAt: number;
 }>;
 
+export type AnonymousSessionCoordinator = Readonly<{
+  token(): Promise<string>;
+  run<T>(operation: (token: string) => Promise<T>): Promise<T>;
+}>;
+
+export function createAnonymousSessionCoordinator(options: Readonly<{
+  read(): AnonymousSession | null;
+  write(session: AnonymousSession): void;
+  clear(): void;
+  create?: () => Promise<AnonymousSession>;
+}>): AnonymousSessionCoordinator {
+  let creation: Promise<AnonymousSession> | null = null;
+  const create = options.create ?? (() => createAnonymousSession());
+
+  const token = async (forceNew = false): Promise<string> => {
+    if (!forceNew) {
+      const existing = options.read();
+      if (existing) return existing.token;
+    }
+    if (!creation) {
+      const pending = create().then((session) => {
+        options.write(session);
+        return session;
+      });
+      creation = pending;
+      const clearCreation = () => {
+        if (creation === pending) creation = null;
+      };
+      void pending.then(clearCreation, clearCreation);
+    }
+    return (await creation).token;
+  };
+
+  return {
+    token: () => token(false),
+    async run<T>(operation: (token: string) => Promise<T>): Promise<T> {
+      try {
+        return await operation(await token(false));
+      } catch (error) {
+        if (!(error instanceof RouteApiError) || error.status !== 401) {
+          throw error;
+        }
+        options.clear();
+        return operation(await token(true));
+      }
+    },
+  };
+}
+
 async function jsonPayload(
   response: Response,
 ): Promise<Record<string, unknown>> {
@@ -110,6 +159,7 @@ export async function saveRoute(
     request: PlanRoutesApiRequest;
     route: ApiRecommendedRoute;
   }>,
+  idempotencyKey?: string,
   fetcher: RouteApiFetch = globalThis.fetch,
 ): Promise<SavedRouteSummary> {
   const payload = await userDataRequest(
@@ -120,6 +170,9 @@ export async function saveRoute(
         accept: "application/json",
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
+        ...(idempotencyKey
+          ? { "idempotency-key": idempotencyKey }
+          : {}),
       },
       body: JSON.stringify({
         schemaVersion: "1",

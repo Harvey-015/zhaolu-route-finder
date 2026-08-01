@@ -23,8 +23,9 @@ http://127.0.0.1:8787
 
 可以通过 `HOST` 和 `PORT` 修改监听地址，通过
 `ZHAOLU_DATABASE_PATH` 修改 SQLite 文件位置，默认是
-`data/zhaolu.sqlite`。当前匿名设备会话具有鉴权和过期策略，但生产限流要在
-第七阶段完成，因此此时仍不应直接暴露到公网。
+`data/zhaolu.sqlite`。匿名设备会话具有鉴权和过期策略；生产运行时已经提供客户端
+限流、高德物理调用预算、可信代理身份解析、指标和脱敏日志。真正暴露到公网前仍需
+按部署文档配置 TLS、Secret、可信代理网段和持久卷。
 
 ## 接口
 
@@ -99,8 +100,13 @@ policy 和本地注册表”的交集。
 Authorization: Bearer zhaolu.v1....
 ```
 
+收藏 POST 可以携带最多 128 字符的 `Idempotency-Key`。同一匿名用户重复提交同一
+键时返回原收藏，不会生成第二条记录。Web 会共享进行中的会话创建、锁住重复收藏，
+并在旧 token 返回 401 时清除本地会话、重新签发后安全重试一次。
+
 会话默认 30 天过期。Web 将 token 保存在同源浏览器存储中；它只代表匿名设备，
-不是手机号、邮箱或第三方账号登录。SQLite 使用外键隔离每个会话的数据。
+不是手机号、邮箱或第三方账号登录。SQLite 使用外键隔离每个会话的数据，并通过
+事务化 `PRAGMA user_version` migration 管理 schema 升级。
 
 高德路线当前 policy 为 `metadata-only`：可以保存名称、距离、得分、请求条件和
 policy snapshot，但不长期保存路线几何。Fixture 路线允许保存完整几何，未知

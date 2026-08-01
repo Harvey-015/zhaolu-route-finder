@@ -43,6 +43,15 @@ export type ServerApiHandler = (
   request: Request,
 ) => Promise<Response>;
 
+type ServerApiEventFields = Readonly<
+  Record<string, string | number | boolean | null>
+>;
+
+export interface ServerApiEventLogger {
+  info(event: string, fields?: ServerApiEventFields): void;
+  error(event: string, fields?: ServerApiEventFields): void;
+}
+
 export type CreateServerApiOptions = Readonly<{
   planRoutes: PlanScenicRoutes;
   timeoutMs?: number;
@@ -51,6 +60,7 @@ export type CreateServerApiOptions = Readonly<{
   deliveryCapabilities?: RouteDeliveryCapabilities;
   userData?: UserDataService;
   rateLimiter?: ApiRateLimiter;
+  eventLogger?: ServerApiEventLogger;
   readinessCheck?: () => Promise<
     Readonly<Record<string, "ok" | "error">>
   >;
@@ -499,7 +509,12 @@ export function createServerApi(
               {
                 schemaVersion: SERVER_API_SCHEMA_VERSION,
                 requestId,
-                route: options.userData.saveRoute(userId, body),
+                route: options.userData.saveRoute(
+                  userId,
+                  body,
+                  request.headers.get("idempotency-key") ??
+                    undefined,
+                ),
               },
               201,
               requestId,
@@ -580,6 +595,11 @@ export function createServerApi(
               : undefined,
           );
         }
+        options.eventLogger?.error("user_data_request_failed", {
+          requestId,
+          stage: "user-data",
+          code: "INTERNAL_ERROR",
+        });
         return errorResponse(
           requestId,
           500,
@@ -608,6 +628,7 @@ export function createServerApi(
       );
     }
 
+    const planStartedAt = performance.now();
     try {
       const body = await readJsonBody(request);
       const planRequest = mapPlanRoutesApiRequest(body, requestId);
@@ -618,6 +639,35 @@ export function createServerApi(
         request.signal,
         timeoutMs,
       );
+      const warningCodes = result.warnings
+        .map(({ code }) => code)
+        .join(",");
+      const providerIds = [
+        ...new Set(
+          result.warnings
+            .map(({ params }) => params?.providerId)
+            .filter(
+              (providerId): providerId is string =>
+                typeof providerId === "string",
+            ),
+        ),
+      ].join(",");
+      options.eventLogger?.info("route_plan_completed", {
+        requestId,
+        status: result.status,
+        generatedCandidateCount:
+          result.diagnostics.generatedCandidateCount,
+        routedCandidateCount:
+          result.diagnostics.routedCandidateCount,
+        selectedRouteCount:
+          result.diagnostics.selectedRouteCount,
+        sceneryDegraded: result.diagnostics.sceneryDegraded,
+        warningCodes,
+        providerIds,
+        durationMs:
+          Math.round((performance.now() - planStartedAt) * 1_000) /
+          1_000,
+      });
       return jsonResponse(
         mapFindScenicRoutesResult(
           result,
@@ -628,6 +678,18 @@ export function createServerApi(
       );
     } catch (error) {
       if (error instanceof ApiTransportError) {
+        if (error.status >= 500) {
+          options.eventLogger?.error("route_plan_failed", {
+            requestId,
+            code: error.code,
+            status: error.status,
+            retryable: error.retryable,
+            durationMs:
+              Math.round(
+                (performance.now() - planStartedAt) * 1_000,
+              ) / 1_000,
+          });
+        }
         return errorResponse(
           requestId,
           error.status,
@@ -636,14 +698,36 @@ export function createServerApi(
         );
       }
       if (error instanceof RouteRecommendationError) {
+        const status = routeErrorStatus(error.code);
+        if (error.code !== "INVALID_REQUEST") {
+          options.eventLogger?.error("route_plan_failed", {
+            requestId,
+            code: error.code,
+            status,
+            retryable: error.retryable,
+            durationMs:
+              Math.round(
+                (performance.now() - planStartedAt) * 1_000,
+              ) / 1_000,
+          });
+        }
         return errorResponse(
           requestId,
-          routeErrorStatus(error.code),
+          status,
           error.code,
           error.retryable,
           error.details,
         );
       }
+      options.eventLogger?.error("route_plan_failed", {
+        requestId,
+        code: "INTERNAL_ERROR",
+        status: 500,
+        retryable: false,
+        durationMs:
+          Math.round((performance.now() - planStartedAt) * 1_000) /
+          1_000,
+      });
       return errorResponse(
         requestId,
         500,

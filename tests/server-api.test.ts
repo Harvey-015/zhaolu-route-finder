@@ -185,7 +185,10 @@ test("exposes stable health and capability discovery endpoints", async () => {
     (await capabilities.json()) as Record<string, unknown>;
   const openApiBody = (await openApi.json()) as {
     openapi: string;
-    paths: Record<string, unknown>;
+    paths: Record<
+      string,
+      Record<string, { parameters?: unknown[]; responses: Record<string, unknown> }>
+    >;
   };
 
   assert.equal(health.status, 200);
@@ -208,6 +211,27 @@ test("exposes stable health and capability discovery endpoints", async () => {
   assert.ok("/api/v1/routes/plan" in openApiBody.paths);
   assert.ok("/api/v1/session" in openApiBody.paths);
   assert.ok("/api/v1/saved-routes" in openApiBody.paths);
+  assert.ok(
+    "429" in
+      openApiBody.paths["/api/v1/session"].post.responses,
+  );
+  assert.ok(
+    "503" in
+      openApiBody.paths["/api/v1/saved-routes"].get.responses,
+  );
+  assert.ok(
+    "415" in
+      openApiBody.paths["/api/v1/saved-routes"].post.responses,
+  );
+  assert.ok(
+    openApiBody.paths["/api/v1/saved-routes"].post.parameters?.some(
+      (parameter) =>
+        typeof parameter === "object" &&
+        parameter !== null &&
+        "name" in parameter &&
+        parameter.name === "Idempotency-Key",
+    ),
+  );
   assert.equal(planCallCount, 0);
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(
@@ -412,6 +436,16 @@ test("enforces JSON content type, syntax and body-size limits", async () => {
 });
 
 test("maps core errors to stable HTTP statuses without leaking causes", async () => {
+  const events: Array<{
+    event: string;
+    fields?: Readonly<Record<string, unknown>>;
+  }> = [];
+  const eventLogger = {
+    info: (event: string, fields?: Readonly<Record<string, unknown>>) =>
+      events.push({ event, fields }),
+    error: (event: string, fields?: Readonly<Record<string, unknown>>) =>
+      events.push({ event, fields }),
+  };
   const quotaHandler = createServerApi({
     planRoutes: async () => {
       throw new RouteRecommendationError({
@@ -424,6 +458,7 @@ test("maps core errors to stable HTTP statuses without leaking causes", async ()
     planRoutes: async () => {
       throw new Error("secret upstream response");
     },
+    eventLogger,
   });
 
   const quota = await quotaHandler(jsonRequest(apiBody()));
@@ -436,6 +471,37 @@ test("maps core errors to stable HTTP statuses without leaking causes", async ()
   assert.equal(internal.status, 500);
   assert.equal(JSON.parse(internalText).error.code, "INTERNAL_ERROR");
   assert.ok(!internalText.includes("secret upstream response"));
+  assert.equal(events[0]?.event, "route_plan_failed");
+  assert.equal(events[0]?.fields?.code, "INTERNAL_ERROR");
+  assert.doesNotMatch(JSON.stringify(events), /secret upstream response/);
+});
+
+test("emits safe route diagnostics without logging user locations", async () => {
+  const events: Array<{
+    event: string;
+    fields?: Readonly<Record<string, unknown>>;
+  }> = [];
+  const handler = createServerApi({
+    planRoutes: async (request) => coreResult(request),
+    eventLogger: {
+      info: (event, fields) => events.push({ event, fields }),
+      error: (event, fields) => events.push({ event, fields }),
+    },
+  });
+
+  const response = await handler(
+    jsonRequest(
+      apiBody({
+        start: { kind: "query", query: "不应进入日志的地点" },
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(events[0]?.event, "route_plan_completed");
+  assert.equal(events[0]?.fields?.generatedCandidateCount, 1);
+  assert.equal(events[0]?.fields?.selectedRouteCount, 1);
+  assert.doesNotMatch(JSON.stringify(events), /不应进入日志的地点/);
 });
 
 test("enforces API timeout and propagates cancellation", async () => {

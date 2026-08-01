@@ -19,10 +19,12 @@ import type {
   FindScenicRoutesLimits,
   ProviderCallContext,
 } from "./ports.ts";
+import { createProviderPhysicalCallBudget } from "./providerBudget.ts";
 
 const DEFAULT_LIMITS: FindScenicRoutesLimits = {
   maxCandidates: 6,
   maxRouteProviderCalls: 6,
+  maxProviderHttpAttempts: 24,
   maxConcurrentRouteRequests: 2,
   maxSceneryAnchors: 24,
   maxOverlapRatio: 0.82,
@@ -37,7 +39,9 @@ function validateWeight(name: string, value: number) {
   }
 }
 
-function validateRequest(request: FindScenicRoutesRequest) {
+export function validateFindScenicRoutesRequest(
+  request: FindScenicRoutesRequest,
+) {
   if (!request.requestId.trim()) {
     throw new RouteRecommendationError({
       code: "INVALID_REQUEST",
@@ -88,6 +92,7 @@ function normalizeLimits(
   const integerKeys = [
     "maxCandidates",
     "maxRouteProviderCalls",
+    "maxProviderHttpAttempts",
     "maxConcurrentRouteRequests",
     "maxSceneryAnchors",
   ] as const;
@@ -303,11 +308,14 @@ export async function findScenicRoutes(
   request: FindScenicRoutesRequest,
   dependencies: FindScenicRoutesDependencies,
 ): Promise<FindScenicRoutesResult> {
-  validateRequest(request);
+  validateFindScenicRoutesRequest(request);
   const limits = normalizeLimits(dependencies.limits);
   const context: ProviderCallContext = {
     requestId: request.requestId,
     signal: dependencies.signal,
+    physicalCallBudget: createProviderPhysicalCallBudget(
+      limits.maxProviderHttpAttempts,
+    ),
   };
   const warnings: RecommendationWarning[] = [];
   throwIfAborted(dependencies.signal);

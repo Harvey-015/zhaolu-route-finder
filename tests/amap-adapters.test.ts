@@ -18,6 +18,7 @@ import {
   wgs84Point,
 } from "../src/route-recommendation/coordinates.ts";
 import { ProviderError } from "../src/route-recommendation/errors.ts";
+import { createProviderPhysicalCallBudget } from "../src/route-recommendation/providerBudget.ts";
 import type { RouteCandidate } from "../src/route-recommendation/models.ts";
 
 const context = { requestId: "amap-fixture-request" } as const;
@@ -194,6 +195,73 @@ test("retries one transient HTTP failure in the shared AMap client", async () =>
 
   assert.equal(place.point.crs, "WGS84");
   assert.equal(attempts, 2);
+});
+
+test("enforces the request physical-call budget before a retry", async () => {
+  let attempts = 0;
+  const provider = new AmapPlaceProvider(
+    new AmapWebServiceClient({
+      apiKey: "fixture-key",
+      maxAttempts: 2,
+      retryDelayMs: 0,
+      fetcher: async () => {
+        attempts += 1;
+        return new Response("temporary unavailable", { status: 503 });
+      },
+    }),
+  );
+
+  await assert.rejects(
+    () =>
+      provider.resolve(
+        { input: { kind: "query", query: "杭州西湖" } },
+        {
+          ...context,
+          physicalCallBudget: createProviderPhysicalCallBudget(1),
+        },
+      ),
+    (error: unknown) =>
+      error instanceof ProviderError &&
+      error.code === "QUOTA_EXCEEDED" &&
+      error.message === "PROVIDER_PHYSICAL_CALL_BUDGET_EXCEEDED",
+  );
+  assert.equal(attempts, 1);
+});
+
+test("enforces a shared per-minute AMap attempt ceiling", async () => {
+  const success = await fixture("geocode-success.json");
+  let attempts = 0;
+  const provider = new AmapPlaceProvider(
+    new AmapWebServiceClient({
+      apiKey: "fixture-key",
+      maxAttempts: 1,
+      maxAttemptsPerMinute: 1,
+      fetcher: async () => {
+        attempts += 1;
+        return new Response(JSON.stringify(success), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    }),
+  );
+
+  await provider.resolve(
+    { input: { kind: "query", query: "杭州西湖" } },
+    context,
+  );
+  await assert.rejects(
+    () =>
+      provider.resolve(
+        { input: { kind: "query", query: "杭州东站" } },
+        context,
+      ),
+    (error: unknown) =>
+      error instanceof ProviderError &&
+      error.code === "QUOTA_EXCEEDED" &&
+      error.message === "AMAP_GLOBAL_ATTEMPT_LIMIT_EXCEEDED",
+  );
+  assert.equal(attempts, 1);
 });
 
 test("splits a running loop into ordered AMap legs and merges WGS-84 output", async () => {
