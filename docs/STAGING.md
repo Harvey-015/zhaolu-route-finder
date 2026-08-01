@@ -66,6 +66,9 @@ pnpm run smoke:staging
 成功输出只包含检查名、请求数、路线数和能力布尔值。失败输出为稳定错误码，不打印
 响应正文、Key、地点坐标或路线几何。
 
+基础烟雾通过后，按 `docs/RELEASE_GATES.md` 继续执行杭州、上海、成都真实城市验收，
+再依次运行不消耗 Provider 额度的 edge-read 压测和经过额度批准的 route-plan 压测。
+
 ## 回滚
 
 保留上一版本的镜像 digest。验收失败时停止开放流量，恢复上一 digest 并重新运行

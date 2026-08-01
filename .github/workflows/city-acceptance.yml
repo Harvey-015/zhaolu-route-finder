@@ -1,0 +1,41 @@
+name: city-acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS origin of the staging deployment
+        required: true
+        type: string
+      cases_json:
+        description: Optional JSON array with 1-5 city cases; blank uses Hangzhou, Shanghai, and Chengdu
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: city-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run acceptance:cities
+        env:
+          CITY_ACCEPTANCE_BASE_URL: ${{ inputs.base_url }}
+          CITY_ACCEPTANCE_CASES_JSON: ${{ inputs.cases_json }}
+          CITY_ACCEPTANCE_CONFIRMATION: staging-only-three-live-requests-approved

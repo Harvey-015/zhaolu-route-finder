@@ -1,0 +1,68 @@
+name: load-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS origin of the staging deployment
+        required: true
+        type: string
+      profile:
+        description: edge-read is quota-free; route-plan consumes provider quota
+        required: true
+        default: edge-read
+        type: choice
+        options:
+          - edge-read
+          - route-plan
+      requests:
+        description: Total requests (route-plan maximum 50; edge-read maximum 1000)
+        required: true
+        default: "200"
+        type: string
+      concurrency:
+        description: Worker concurrency (route-plan maximum 5; edge-read maximum 50)
+        required: true
+        default: "20"
+        type: string
+      p95_limit_ms:
+        description: Maximum accepted p95 latency in milliseconds
+        required: true
+        default: "1000"
+        type: string
+      approve_provider_quota:
+        description: Must be checked when route-plan is selected
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run load:staging
+        env:
+          LOAD_TEST_BASE_URL: ${{ inputs.base_url }}
+          LOAD_TEST_PROFILE: ${{ inputs.profile }}
+          LOAD_TEST_REQUESTS: ${{ inputs.requests }}
+          LOAD_TEST_CONCURRENCY: ${{ inputs.concurrency }}
+          LOAD_TEST_P95_LIMIT_MS: ${{ inputs.p95_limit_ms }}
+          LOAD_TEST_CONFIRMATION: ${{ inputs.approve_provider_quota && 'staging-only-provider-quota-approved' || '' }}
