@@ -1,0 +1,72 @@
+name: Provider 或数据源接入
+description: 提议新的地图、路线、地点、环境数据或交付 Provider
+title: "[Provider]: "
+labels:
+  - provider
+  - enhancement
+body:
+  - type: dropdown
+    id: provider_type
+    attributes:
+      label: Provider 类型
+      options:
+        - 地图渲染器或底图
+        - 地图参考图层
+        - 地点搜索或地理编码
+        - 步行或骑行路线
+        - 环境或卫星参考数据
+        - 推荐算法 Profile
+        - 路线导出或导航交接
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: 服务或数据源名称
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: 产品价值
+      description: 它解决什么问题，为什么现有 Provider 无法满足？
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: 技术契约
+      description: API/格式、坐标系、地域覆盖、超时、重试、限额、缓存和降级方式。
+    validations:
+      required: true
+  - type: textarea
+    id: license
+    attributes:
+      label: 许可证与展示要求
+      description: 提供公开条款链接，并说明商用、缓存、混合展示、截图、导出、归属文字和终止条件。
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: 数据与隐私边界
+      description: 会发送、保存或派生哪些位置和路线数据？保存多久？
+    validations:
+      required: true
+  - type: textarea
+    id: testing
+    attributes:
+      label: 测试计划
+      description: 离线契约测试、受控在线冒烟、配额上限和失败降级。
+    validations:
+      required: true
+  - type: checkboxes
+    id: architecture
+    attributes:
+      label: 架构确认
+      options:
+        - label: 接入将通过注册表和适配器完成，不在核心或页面中增加 Provider 条件分支
+          required: true
+        - label: 我不会在 Issue 或 PR 中提交真实 Key 或原始用户数据
+          required: true

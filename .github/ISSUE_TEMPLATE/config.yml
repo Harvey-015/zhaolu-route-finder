@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞私下报告
+    url: https://github.com/Harvey-015/zhaolu-route-finder/security/advisories/new
+    about: 不要公开提交凭据泄露、鉴权绕过或用户数据暴露。
+  - name: 开发和部署文档
+    url: https://github.com/Harvey-015/zhaolu-route-finder/blob/main/SUPPORT.md
+    about: 创建 Issue 前先查看常见入口和脱敏要求。

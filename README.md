@@ -4,6 +4,9 @@
 
 项目目标不是重做底层路线引擎，而是在地图服务提供的真实可通行道路上，结合环境特征、用户偏好和路线多样性，推荐距离合适且风景更好的路线。
 
+[![CI](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 ## 当前状态
 
 七个阶段的仓库实现已经完成：
@@ -90,6 +93,25 @@ pnpm run test:e2e
 
 `test:e2e` 会启动本地 Fixture API 与 Vite，并用 Chromium 验证路线生成、
 收藏和刷新恢复主流程；CI 会自动安装对应浏览器。
+
+## 参与开发
+
+欢迎提交缺陷修复、测试、文档，以及新的地图、路线、环境数据和推荐算法实现。开始前请阅读：
+
+- [贡献指南](CONTRIBUTING.md)
+- [社区行为准则](CODE_OF_CONDUCT.md)
+- [安全策略](SECURITY.md)
+- [支持范围](SUPPORT.md)
+- [项目治理](GOVERNANCE.md)
+- [公开路线图](ROADMAP.md)
+- [变更记录](CHANGELOG.md)
+- [开放源代码发布清单](docs/OPEN_SOURCE_RELEASE.md)
+
+新增能力时保持现有解耦边界：第三方 DTO、SDK 和网络调用留在 Adapter；核心只依赖内部模型和端口；Provider、地图图层和算法 Profile 通过组合根或注册表接入。较大的扩展先使用仓库中的 Provider Issue 模板讨论坐标系、许可证、额度、缓存和降级策略。
+
+## 许可证
+
+项目采用 [Apache License 2.0](LICENSE) 开源。第三方地图、卫星影像、路线和环境数据仍分别受对应 Provider 条款与数据许可证约束；代码许可证不替代这些授权。
 
 ## 下一阶段
 
