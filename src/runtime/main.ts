@@ -80,6 +80,7 @@ export async function startProductionRuntime(
   const handler = createServerApi({
     planRoutes,
     deliveryPolicyResolver,
+    legalConfig: config.legalDocuments,
     userData,
     rateLimiter,
     eventLogger: logger,

@@ -8,7 +8,7 @@ type StagingFetch = (
 type StagingSmokeResult =
   | Readonly<{
       status: "passed";
-      requestCount: 7;
+      requestCount: 8;
       checks: readonly string[];
       routeCount: number;
       webMapEnabled: boolean;
@@ -255,6 +255,25 @@ export async function runStagingSmoke(
     }
     checks.push("map-config");
 
+    const legalConfig = await requestJson(
+      "/api/v1/legal-config",
+      "STAGING_LEGAL_CONFIG_INVALID",
+    );
+    if (
+      legalConfig.configured !== true ||
+      typeof legalConfig.documentVersion !== "string" ||
+      typeof legalConfig.operatorName !== "string" ||
+      legalConfig.operatorName.length === 0 ||
+      typeof legalConfig.privacyContact !== "string" ||
+      legalConfig.privacyContact.length === 0 ||
+      typeof legalConfig.logRetentionDays !== "number"
+    ) {
+      throw new StagingSmokeError(
+        "STAGING_LEGAL_CONFIG_INVALID",
+      );
+    }
+    checks.push("legal-config");
+
     const openApi = await requestJson(
       "/api/v1/openapi.json",
       "STAGING_OPENAPI_INVALID",
@@ -266,7 +285,8 @@ export async function runStagingSmoke(
     if (
       openApi.openapi !== "3.1.0" ||
       !("/api/v1/routes/plan" in paths) ||
-      !("/api/v1/map-config" in paths)
+      !("/api/v1/map-config" in paths) ||
+      !("/api/v1/legal-config" in paths)
     ) {
       throw new StagingSmokeError("STAGING_OPENAPI_INVALID");
     }
@@ -358,7 +378,7 @@ export async function runStagingSmoke(
 
     return {
       status: "passed",
-      requestCount: 7,
+      requestCount: 8,
       checks,
       routeCount: plan.routes.length,
       webMapEnabled: config.expectWebMap,

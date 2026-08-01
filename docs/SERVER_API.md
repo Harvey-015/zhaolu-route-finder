@@ -34,9 +34,11 @@ GET  /api/v1/health
 GET  /api/v1/ready
 GET  /api/v1/capabilities
 GET  /api/v1/map-config
+GET  /api/v1/legal-config
 GET  /api/v1/openapi.json
 POST /api/v1/routes/plan
 POST /api/v1/session
+DELETE /api/v1/session
 GET  /api/v1/saved-routes
 POST /api/v1/saved-routes
 DELETE /api/v1/saved-routes/{routeId}
@@ -48,6 +50,9 @@ POST /api/v1/saved-routes/{routeId}/feedback
 `GET /api/v1/map-config` 只返回是否启用底图、Provider ID、公开 Web JS Key 和
 同源 `/_AMapService` 路径，绝不返回 `AMAP_JS_SECURITY_CODE`。安全密钥由 Node
 代理在白名单内的上游请求中追加。
+
+`GET /api/v1/legal-config` 返回公开的文档版本、运营主体、隐私联系方式和日志保存
+天数；生产运行时缺少主体或联系方式会拒绝启动。
 
 ## 路线请求
 
@@ -112,6 +117,10 @@ Authorization: Bearer zhaolu.v1....
 会话默认 30 天过期。Web 将 token 保存在同源浏览器存储中；它只代表匿名设备，
 不是手机号、邮箱或第三方账号登录。SQLite 使用外键隔离每个会话的数据，并通过
 事务化 `PRAGMA user_version` migration 管理 schema 升级。
+
+`DELETE /api/v1/session` 使用相同 Bearer token 鉴权，并通过数据库外键级联删除会话、
+全部收藏和全部现场反馈。删除完成后旧 token 立即失效；客户端不能在收到 401 时为
+删除操作自动创建新会话。
 
 高德路线当前 policy 为 `metadata-only`：可以保存名称、距离、得分、请求条件和
 policy snapshot，但不长期保存路线几何。Fixture 路线允许保存完整几何，未知

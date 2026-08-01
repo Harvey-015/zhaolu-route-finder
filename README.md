@@ -63,7 +63,8 @@ Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
 [路线交付文档](docs/ROUTE_DELIVERY.md)，Provider 授权门禁见
 [合规决策记录](docs/PROVIDER_COMPLIANCE.md)，生产运行见
 [部署文档](docs/DEPLOYMENT.md)，预发布实网验收见
-[预发布文档](docs/STAGING.md)。
+[预发布文档](docs/STAGING.md)，隐私、条款与数据权利见
+[隐私与条款文档](docs/PRIVACY_AND_TERMS.md)。
 
 ## 开发命令
 

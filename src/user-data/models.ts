@@ -51,6 +51,7 @@ export interface UserDataStore {
   isHealthy(): boolean;
   createSession(session: UserSession): void;
   hasSession(userId: string, now: number): boolean;
+  deleteUserData(userId: string): boolean;
   saveRoute(record: SavedRouteRecord): void;
   findSavedRouteByIdempotencyKey(
     userId: string,

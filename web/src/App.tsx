@@ -33,6 +33,7 @@ import {
 } from "./model.ts";
 import {
   createAnonymousSessionCoordinator,
+  deleteAllUserData,
   deleteSavedRoute,
   listSavedRoutes,
   saveRoute,
@@ -40,8 +41,11 @@ import {
   type AnonymousSession,
   type AnonymousSessionCoordinator,
 } from "./userDataApi.ts";
+import { LEGAL_DOCUMENT_VERSION } from "./legal.ts";
 
 const SESSION_STORAGE_KEY = "zhaolu.anonymous-session.v1";
+const LEGAL_CONSENT_STORAGE_KEY =
+  "zhaolu.legal-consent-version";
 
 function storedSession(): AnonymousSession | null {
   try {
@@ -75,6 +79,28 @@ function rememberSession(session: AnonymousSession): void {
 
 function forgetSession(): void {
   localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function storedLegalConsent(): boolean {
+  try {
+    return (
+      localStorage.getItem(LEGAL_CONSENT_STORAGE_KEY) ===
+      LEGAL_DOCUMENT_VERSION
+    );
+  } catch {
+    return false;
+  }
+}
+
+function rememberLegalConsent(accepted: boolean): void {
+  if (accepted) {
+    localStorage.setItem(
+      LEGAL_CONSENT_STORAGE_KEY,
+      LEGAL_DOCUMENT_VERSION,
+    );
+  } else {
+    localStorage.removeItem(LEGAL_CONSENT_STORAGE_KEY);
+  }
 }
 
 type SearchState =
@@ -490,6 +516,41 @@ function SavedRoutesPanel({
   );
 }
 
+function PrivacyCenter({
+  deleting,
+  notice,
+  onDeleteAll,
+}: Readonly<{
+  deleting: boolean;
+  notice: string | null;
+  onDeleteAll: () => void;
+}>) {
+  return (
+    <section className="privacy-center" aria-label="隐私与数据">
+      <div className="privacy-center-heading">
+        <p className="eyebrow">隐私与数据</p>
+        <span>匿名设备会话</span>
+      </div>
+      <p>
+        收藏和反馈只绑定本浏览器。你可以一次删除会话、全部收藏和全部反馈。
+      </p>
+      <div className="privacy-links">
+        <a href="/privacy">隐私政策</a>
+        <a href="/terms">服务条款与路线免责声明</a>
+      </div>
+      <button
+        className="delete-all-data"
+        disabled={deleting}
+        onClick={onDeleteAll}
+        type="button"
+      >
+        {deleting ? "正在删除…" : "删除全部设备数据"}
+      </button>
+      {notice ? <p className="privacy-notice" role="status">{notice}</p> : null}
+    </section>
+  );
+}
+
 export type AppProps = Readonly<{
   basemapRenderer?: BasemapRenderer;
   deliveryRegistry?: RouteDeliveryRegistry;
@@ -517,6 +578,12 @@ export function App({
   >({});
   const [deliveryNotice, setDeliveryNotice] =
     useState<string | null>(null);
+  const [privacyNotice, setPrivacyNotice] =
+    useState<string | null>(null);
+  const [deletingAllData, setDeletingAllData] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(
+    storedLegalConsent,
+  );
   const [savingRouteIds, setSavingRouteIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -562,7 +629,7 @@ export function App({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.startQuery.trim()) return;
+    if (!form.startQuery.trim() || !legalAccepted) return;
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -738,6 +805,47 @@ export function App({
     }
   };
 
+  const removeAllUserData = async () => {
+    if (
+      !window.confirm(
+        "这会永久删除本匿名会话、全部收藏和全部反馈，且无法恢复。是否继续？",
+      )
+    ) {
+      return;
+    }
+    const session = storedSession();
+    setDeletingAllData(true);
+    setPrivacyNotice("正在删除全部设备数据…");
+    try {
+      if (session) {
+        await deleteAllUserData(session.token);
+      }
+      forgetSession();
+      rememberLegalConsent(false);
+      setLegalAccepted(false);
+      setSavedRoutes([]);
+      setSavedByResultRoute({});
+      setPrivacyNotice("全部设备数据已删除，原匿名会话已失效。");
+    } catch (error) {
+      if (error instanceof RouteApiError && error.status === 401) {
+        forgetSession();
+        rememberLegalConsent(false);
+        setLegalAccepted(false);
+        setSavedRoutes([]);
+        setSavedByResultRoute({});
+        setPrivacyNotice("匿名会话已失效，本地设备数据已清除。");
+      } else {
+        setPrivacyNotice(
+          error instanceof RouteApiError
+            ? "删除失败：" + error.code
+            : "删除失败，请稍后重试。",
+        );
+      }
+    } finally {
+      setDeletingAllData(false);
+    }
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -910,11 +1018,35 @@ export function App({
               />
             </div>
 
+            <div className="legal-consent">
+              <input
+                checked={legalAccepted}
+                id="legal-consent"
+                onChange={(event) => {
+                  const accepted = event.target.checked;
+                  rememberLegalConsent(accepted);
+                  setLegalAccepted(accepted);
+                }}
+                required
+                type="checkbox"
+              />
+              <div>
+                <label htmlFor="legal-consent">
+                  我已阅读并同意当前版本的处理规则
+                </label>
+                <p>
+                  查看 <a href="/privacy">隐私政策</a> 与{" "}
+                  <a href="/terms">服务条款和路线免责声明</a>。路线仅供参考，
+                  不替代交通法规、现场判断、医疗建议或紧急服务。
+                </p>
+              </div>
+            </div>
             <button
               className="submit-button"
               disabled={
                 search.status === "loading" ||
-                !form.startQuery.trim()
+                !form.startQuery.trim() ||
+                !legalAccepted
               }
               type="submit"
             >
@@ -998,11 +1130,21 @@ export function App({
             }}
             routes={savedRoutes}
           />
+          <PrivacyCenter
+            deleting={deletingAllData}
+            notice={privacyNotice}
+            onDeleteAll={() => {
+              void removeAllUserData();
+            }}
+          />
         </aside>
       </main>
 
       <footer>
-        <span>找路 · Provider-neutral route core</span>
+        <span>
+          找路 · Provider-neutral route core ·{" "}
+          <a href="/privacy">隐私</a> · <a href="/terms">条款</a>
+        </span>
         <span>WGS84 · GeoJSON · ESA WorldCover 2021</span>
       </footer>
     </div>

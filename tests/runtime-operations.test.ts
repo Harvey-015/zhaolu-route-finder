@@ -28,6 +28,8 @@ function environment(
 ): NodeJS.ProcessEnv {
   return {
     AMAP_WEB_SERVICE_KEY: "amap-placeholder",
+    ZHAOLU_OPERATOR_NAME: "找路测试运营者",
+    ZHAOLU_PRIVACY_CONTACT: "privacy@example.test",
     ZHAOLU_SESSION_SECRET:
       "session-secret-at-least-thirty-two-characters",
     ZHAOLU_OBSERVABILITY_TOKEN:
@@ -80,6 +82,11 @@ test("loads validated production config without exposing secret values", () => {
     undefined,
   );
   assert.equal(config.amapWebMap, undefined);
+  assert.deepEqual(config.legalDocuments, {
+    operatorName: "找路测试运营者",
+    privacyContact: "privacy@example.test",
+    logRetentionDays: 30,
+  });
   assert.deepEqual(config.trustedProxyRanges, []);
   assert.deepEqual(
     loadRuntimeConfig(
@@ -168,6 +175,27 @@ test("loads validated production config without exposing secret values", () => {
         environment({ AMAP_ROUTE_EXPORTS_ALLOWED: "yes" }),
       ),
     /AMAP_ROUTE_EXPORTS_ALLOWED_INVALID/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ ZHAOLU_OPERATOR_NAME: "" }),
+      ),
+    /ZHAOLU_OPERATOR_NAME_REQUIRED/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ ZHAOLU_PRIVACY_CONTACT: "" }),
+      ),
+    /ZHAOLU_PRIVACY_CONTACT_REQUIRED/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ ZHAOLU_LOG_RETENTION_DAYS: "0" }),
+      ),
+    /ZHAOLU_LOG_RETENTION_DAYS_INVALID/,
   );
 });
 

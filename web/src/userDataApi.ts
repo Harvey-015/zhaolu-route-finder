@@ -227,6 +227,23 @@ export async function deleteSavedRoute(
   );
 }
 
+export async function deleteAllUserData(
+  token: string,
+  fetcher: RouteApiFetch = globalThis.fetch,
+): Promise<void> {
+  await userDataRequest(
+    "/api/v1/session",
+    {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${token}`,
+      },
+    },
+    fetcher,
+  );
+}
+
 export async function sendFieldReport(
   token: string,
   routeId: string,

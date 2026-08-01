@@ -41,6 +41,9 @@ pnpm run dev:web
 - 通过匿名设备会话收藏、恢复和删除路线；
 - 对收藏路线提交 1–5 分现场体验；
 - 采用路线实际距离调整条件后重新规划。
+- 首次规划前确认版本化隐私政策、服务条款与路线免责声明；
+- 访问 `/privacy` 和 `/terms` 查看实际运营主体与处理规则；
+- 一键删除匿名会话、全部设备收藏、反馈和本地同意记录。
 
 默认 `amapBasemapRenderer` 使用高德 JS API 2.0，并在未配置或加载失败时回退到
 `svgBasemapRenderer`。Web 通过 `BasemapRenderer` 接口接收地图实现；接入

@@ -819,6 +819,7 @@ Core 不反向依赖 Adapters
 - 已增加 liveness、readiness、优雅关闭和定期过期清理；
 - 已增加多阶段非 root Dockerfile、Compose 数据卷和 GitHub Actions 镜像门禁；
 - 已增加不调用 Provider 的生产只读烟雾；
+- 已增加版本化隐私同意、运行时运营者信息、隐私与条款页面，以及匿名用户数据级联删除；
 - 实际发布需要外部容器平台、域名、TLS、Secret 和持久卷；
 - 横向扩容前按实际负载引入 Redis 与 PostgreSQL/PostGIS。
 

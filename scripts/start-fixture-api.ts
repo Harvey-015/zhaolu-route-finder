@@ -20,6 +20,11 @@ const server = createNodeApiServer(
     planRoutes: planner.planRoutes,
     requestIdFactory: () => crypto.randomUUID(),
     deliveryPolicyResolver: resolveFixtureRouteDeliveryPolicy,
+    legalConfig: {
+      operatorName: "找路测试运营者",
+      privacyContact: "privacy@example.test",
+      logRetentionDays: 30,
+    },
     userData,
   }),
 );
