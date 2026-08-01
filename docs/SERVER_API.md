@@ -117,6 +117,10 @@ Authorization: Bearer zhaolu.v1....
 policy snapshot，但不长期保存路线几何。Fixture 路线允许保存完整几何，未知
 Provider 默认拒绝。
 
+高德路线的 GPX/GeoJSON 导出在生产环境默认关闭，API 返回的 `exportFormats` 为空。
+只有已核实授权并配置 `AMAP_ROUTE_EXPORTS_ALLOWED=true` 与授权依据编号时才会开启；
+高德 URI 交接不受该导出开关影响。
+
 ## 稳定错误
 
 错误统一返回：

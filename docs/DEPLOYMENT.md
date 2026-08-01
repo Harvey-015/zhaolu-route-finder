@@ -26,6 +26,7 @@ $env:AMAP_WEB_SERVICE_KEY = "<server-key>"
 $env:AMAP_WEB_JS_KEY = "<browser-web-key>"
 $env:AMAP_JS_SECURITY_CODE = "<server-only-js-security-code>"
 $env:ZHAOLU_PUBLIC_ORIGIN = "https://routes.example.com"
+$env:AMAP_ROUTE_EXPORTS_ALLOWED = "false"
 $env:ZHAOLU_SESSION_SECRET = "<random-secret-at-least-32-characters>"
 $env:ZHAOLU_OBSERVABILITY_TOKEN = "<different-random-secret-at-least-32-characters>"
 pnpm run start:production
@@ -38,6 +39,17 @@ pnpm run start:production
 生产域名。`AMAP_JS_SECURITY_CODE` 不下发；Node 运行时只允许来自
 `ZHAOLU_PUBLIC_ORIGIN` 的浏览器请求访问 `/_AMapService`，并且只转发白名单内的
 高德路径。开发时来源可以是 `http://127.0.0.1:5173`，非本机来源必须使用 HTTPS。
+
+高德路线的 GPX/GeoJSON 导出默认关闭。只有已经取得且核实覆盖该数据用途的合同或
+书面授权时，才可同时设置：
+
+```text
+AMAP_ROUTE_EXPORTS_ALLOWED=true
+AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE=<合同、工单或审批记录编号>
+```
+
+缺少授权依据时进程会在监听端口前拒绝启动。该编号只作为部署审计线索，不会返回给
+客户端。核实要求和回滚方式见 `docs/PROVIDER_COMPLIANCE.md`。
 
 生产环境位于反向代理或负载均衡器后时，必须把代理实际使用的源地址或 CIDR 写入
 `ZHAOLU_TRUSTED_PROXY_RANGES`，例如 `10.20.0.0/16,fd00:20::/64`。默认值为空，

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolveRouteDeliveryPolicy } from "../route-delivery/policy.ts";
+import { createRouteDeliveryPolicyResolver } from "../route-delivery/policy.ts";
 import { createProductionRoutePlanner } from "../server-api/composition.ts";
 import { createServerApi } from "../server-api/handler.ts";
 import { createNodeApiServer } from "../server-api/nodeServer.ts";
@@ -25,6 +25,11 @@ export async function startProductionRuntime(
     minimumLevel: config.logLevel,
   });
   const metrics = new RuntimeMetrics();
+  const deliveryPolicyResolver =
+    createRouteDeliveryPolicyResolver({
+      amapRouteExportsAllowed:
+        config.amapRouteExportsAllowed,
+    });
   const rateLimiter = new FixedWindowRateLimiter({
     limits: {
       plan: {
@@ -47,7 +52,7 @@ export async function startProductionRuntime(
   const userData = new UserDataService({
     store,
     sessions: new SignedSessionService(config.sessionSecret),
-    policyResolver: resolveRouteDeliveryPolicy,
+    policyResolver: deliveryPolicyResolver,
   });
   const initialPurgedRecords = userData.purgeExpired();
   if (initialPurgedRecords > 0) {
@@ -74,7 +79,7 @@ export async function startProductionRuntime(
   });
   const handler = createServerApi({
     planRoutes,
-    deliveryPolicyResolver: resolveRouteDeliveryPolicy,
+    deliveryPolicyResolver,
     userData,
     rateLimiter,
     eventLogger: logger,

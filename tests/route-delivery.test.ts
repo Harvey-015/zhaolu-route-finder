@@ -12,6 +12,7 @@ import {
 } from "../src/route-delivery/exporters.ts";
 import { RouteDeliveryRegistry } from "../src/route-delivery/registry.ts";
 import {
+  createRouteDeliveryPolicyResolver,
   resolveFixtureRouteDeliveryPolicy,
   resolveRouteDeliveryPolicy,
 } from "../src/route-delivery/policy.ts";
@@ -78,6 +79,20 @@ test("uses explicit Provider policy and denies unknown sources", () => {
   assert.equal(
     resolveRouteDeliveryPolicy("amap-route").persistence,
     "metadata-only",
+  );
+  assert.deepEqual(
+    resolveRouteDeliveryPolicy("amap-route").exportFormats,
+    [],
+  );
+  assert.deepEqual(
+    resolveRouteDeliveryPolicy("amap-route").navigationTargets,
+    ["amap"],
+  );
+  assert.deepEqual(
+    createRouteDeliveryPolicyResolver({
+      amapRouteExportsAllowed: true,
+    })("amap-route").exportFormats,
+    ["geojson", "gpx"],
   );
   assert.deepEqual(
     resolveRouteDeliveryPolicy("unknown-provider").exportFormats,

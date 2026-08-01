@@ -9,6 +9,8 @@ export type RuntimeConfig = Readonly<{
   amapCity?: string;
   amapMaxHttpAttemptsPerPlan: number;
   amapMaxHttpAttemptsPerMinute: number;
+  amapRouteExportsAllowed: boolean;
+  amapRouteExportAuthorizationReference?: string;
   amapWebMap?: Readonly<{
     webJsKey: string;
     securityCode: string;
@@ -110,6 +112,18 @@ function integer(
   return value;
 }
 
+function boolean(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  fallback: boolean,
+): boolean {
+  const raw = environment[name]?.trim();
+  if (!raw) return fallback;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new RangeError(`${name}_INVALID`);
+}
+
 function commaSeparatedList(
   environment: NodeJS.ProcessEnv,
   name: string,
@@ -132,6 +146,27 @@ export function loadRuntimeConfig(
     throw new RangeError("LOG_LEVEL_INVALID");
   }
   const amapWebMap = optionalAmapWebMap(environment);
+  const amapRouteExportsAllowed = boolean(
+    environment,
+    "AMAP_ROUTE_EXPORTS_ALLOWED",
+    false,
+  );
+  const amapRouteExportAuthorizationReference =
+    environment.AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE?.trim() ??
+    "";
+  if (
+    amapRouteExportsAllowed &&
+    !amapRouteExportAuthorizationReference
+  ) {
+    throw new RangeError(
+      "AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE_REQUIRED",
+    );
+  }
+  if (amapRouteExportAuthorizationReference.length > 256) {
+    throw new RangeError(
+      "AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE_INVALID",
+    );
+  }
   return Object.freeze({
     host: environment.HOST?.trim() || "0.0.0.0",
     port: integer(environment, "PORT", 8787, 1, 65_535),
@@ -156,6 +191,10 @@ export function loadRuntimeConfig(
       1,
       100_000,
     ),
+    amapRouteExportsAllowed,
+    ...(amapRouteExportAuthorizationReference
+      ? { amapRouteExportAuthorizationReference }
+      : {}),
     ...(amapWebMap ? { amapWebMap } : {}),
     sessionSecret: requiredSecret(
       environment,
