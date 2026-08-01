@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "phase": "closed-beta",
+  "release": {
+    "commitSha": "0000000000000000000000000000000000000000",
+    "imageDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "previousImageDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "stagingOrigin": "https://staging.routes.example.com",
+    "productionOrigin": null,
+    "plannedAt": "2026-08-15T02:00:00.000Z"
+  },
+  "gates": [
+    { "id": "ci", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "staging-smoke", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "operations-smoke", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "city-acceptance", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "edge-load", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "route-load", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "security-review", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "backup-restore-drill", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "provider-authorization", "status": "pending", "checkedAt": null, "evidenceUrl": null },
+    { "id": "privacy-terms-review", "status": "pending", "checkedAt": null, "evidenceUrl": null }
+  ],
+  "approvals": [],
+  "openRisks": []
+}

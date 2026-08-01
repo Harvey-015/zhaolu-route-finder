@@ -68,7 +68,8 @@ Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
 [预发布文档](docs/STAGING.md)，隐私、条款与数据权利见
 [隐私与条款文档](docs/PRIVACY_AND_TERMS.md)，监控、告警和恢复见
 [运行保障文档](docs/OPERATIONS.md)，上线质量门禁见
-[发布门禁文档](docs/RELEASE_GATES.md)。
+[发布门禁文档](docs/RELEASE_GATES.md)，最终 Go/No-Go 流程见
+[发布清单](docs/LAUNCH_CHECKLIST.md)。
 
 ## 开发命令
 
