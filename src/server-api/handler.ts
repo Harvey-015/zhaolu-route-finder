@@ -10,6 +10,10 @@ import {
   SERVER_API_SCHEMA_VERSION,
   type ServerApiErrorResponse,
 } from "./contracts.ts";
+import {
+  LEGAL_DOCUMENT_VERSION,
+  type LegalDocumentConfig,
+} from "../legal/config.ts";
 import type { RouteDeliveryPolicyResolver } from "../route-delivery/policy.ts";
 import type { RouteDeliveryCapabilities } from "../route-delivery/ports.ts";
 import type {
@@ -69,6 +73,7 @@ export type CreateServerApiOptions = Readonly<{
     key: string;
     serviceHost: "/_AMapService";
   }>;
+  legalConfig?: LegalDocumentConfig;
 }>;
 
 class ApiTransportError extends Error {
@@ -461,6 +466,29 @@ export function createServerApi(
       );
     }
 
+    if (pathname === "/api/v1/legal-config") {
+      if (request.method !== "GET") {
+        return errorResponse(
+          requestId,
+          405,
+          "METHOD_NOT_ALLOWED",
+          false,
+          undefined,
+          { allow: "GET" },
+        );
+      }
+      return jsonResponse(
+        {
+          schemaVersion: SERVER_API_SCHEMA_VERSION,
+          documentVersion: LEGAL_DOCUMENT_VERSION,
+          configured: options.legalConfig !== undefined,
+          ...(options.legalConfig ?? {}),
+        },
+        200,
+        requestId,
+      );
+    }
+
     if (pathname === "/api/v1/openapi.json") {
       if (request.method !== "GET") {
         return errorResponse(
@@ -503,24 +531,37 @@ export function createServerApi(
       }
       try {
         if (pathname === "/api/v1/session") {
-          if (request.method !== "POST") {
-            return errorResponse(
+          if (request.method === "POST") {
+            return jsonResponse(
+              {
+                schemaVersion: SERVER_API_SCHEMA_VERSION,
+                requestId,
+                session: options.userData.issueSession(),
+              },
+              201,
               requestId,
-              405,
-              "METHOD_NOT_ALLOWED",
-              false,
-              undefined,
-              { allow: "POST" },
             );
           }
-          return jsonResponse(
-            {
-              schemaVersion: SERVER_API_SCHEMA_VERSION,
+          if (request.method === "DELETE") {
+            const userId = options.userData.authenticate(request);
+            options.userData.deleteAllUserData(userId);
+            return jsonResponse(
+              {
+                schemaVersion: SERVER_API_SCHEMA_VERSION,
+                requestId,
+                deleted: true,
+              },
+              200,
               requestId,
-              session: options.userData.issueSession(),
-            },
-            201,
+            );
+          }
+          return errorResponse(
             requestId,
+            405,
+            "METHOD_NOT_ALLOWED",
+            false,
+            undefined,
+            { allow: "POST, DELETE" },
           );
         }
 

@@ -13,6 +13,7 @@
 - 边缘必须添加 HSTS，并把实际代理源地址写入 `ZHAOLU_TRUSTED_PROXY_RANGES`；
 - 高德 Web Service Key 与 Web JS Key 分离，Web JS Key 绑定预发布域名；
 - 高德路线文件导出保持关闭，除非已经按 Provider 合规决策记录完成授权复核。
+- 使用真实运营主体、隐私联系方式，并让日志平台保存期限与公开配置一致。
 
 ## 部署顺序
 
@@ -49,13 +50,14 @@ pnpm run smoke:staging
 也可以在 GitHub Actions 手动运行 `staging-smoke` workflow。建议给 GitHub 的
 `staging` Environment 配置人工批准规则。
 
-验收固定发出 7 个请求：health、ready、capabilities、map-config、OpenAPI、Web
+验收固定发出 8 个请求：health、ready、capabilities、map-config、legal-config、OpenAPI、Web
 首页，以及 1 个真实路线规划请求。路线请求只要求 1 条、目标 2 公里；服务端现有的
 单次物理调用上限和每分钟额度继续生效。脚本验证：
 
 - HTTPS、HSTS、CSP、防嵌入和 MIME 嗅探保护；
 - API no-store 与公开契约；
 - 地图配置不泄漏安全密钥；
+- 运营主体、隐私联系方式和日志保存期限已经配置；
 - 高德返回 WGS-84 `LineString`；
 - 路线持久化为 `metadata-only`；
 - 高德 URI 与预期的导出授权状态一致。

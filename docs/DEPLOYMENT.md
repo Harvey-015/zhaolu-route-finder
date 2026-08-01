@@ -12,7 +12,8 @@
 - 两个彼此独立、至少 32 字符的随机 Secret：
   `ZHAOLU_SESSION_SECRET` 和 `ZHAOLU_OBSERVABILITY_TOKEN`；
 - SQLite 数据卷的持久目录；
-- 外部 HTTPS 反向代理或负载均衡器。
+- 外部 HTTPS 反向代理或负载均衡器；
+- 实际运营主体、可公开的隐私联系方式，以及外部日志平台保存天数。
 
 复制 `.env.example` 到部署平台的 Secret/环境变量配置，不要把实际值写回文件或
 Git。生产配置校验会在监听端口前失败，错误只包含变量名，不包含变量值。
@@ -27,6 +28,9 @@ $env:AMAP_WEB_JS_KEY = "<browser-web-key>"
 $env:AMAP_JS_SECURITY_CODE = "<server-only-js-security-code>"
 $env:ZHAOLU_PUBLIC_ORIGIN = "https://routes.example.com"
 $env:AMAP_ROUTE_EXPORTS_ALLOWED = "false"
+$env:ZHAOLU_OPERATOR_NAME = "<实际运营主体全称>"
+$env:ZHAOLU_PRIVACY_CONTACT = "<隐私联系邮箱或其他公开联系方式>"
+$env:ZHAOLU_LOG_RETENTION_DAYS = "30"
 $env:ZHAOLU_SESSION_SECRET = "<random-secret-at-least-32-characters>"
 $env:ZHAOLU_OBSERVABILITY_TOKEN = "<different-random-secret-at-least-32-characters>"
 pnpm run start:production
@@ -34,6 +38,9 @@ pnpm run start:production
 
 默认监听 `0.0.0.0:8787`，静态文件来自 `web-dist`，数据库为
 `data/zhaolu.sqlite`。
+
+运营主体与隐私联系方式缺失时生产进程拒绝启动。日志天数是公开承诺，必须同步配置到
+实际日志平台；隐私政策、服务条款和级联删除说明见 `docs/PRIVACY_AND_TERMS.md`。
 
 高德 Web JS Key 会通过 `/api/v1/map-config` 下发给浏览器，应在高德控制台绑定
 生产域名。`AMAP_JS_SECURITY_CODE` 不下发；Node 运行时只允许来自
@@ -133,7 +140,7 @@ $env:PRODUCTION_BASE_URL = "https://routes.example.com"
 pnpm run smoke:production
 ```
 
-烟雾只发 4 个只读请求：health、ready、capabilities 和 Web 首页；不会调用路线
+烟雾只发 5 个只读请求：health、ready、capabilities、legal-config 和 Web 首页；不会调用路线
 Provider，也不消耗高德或 WorldCover 配额。
 
 预发布环境另有包含 1 次真实高德路线规划的受控验收，以及只读容器、不可变镜像、

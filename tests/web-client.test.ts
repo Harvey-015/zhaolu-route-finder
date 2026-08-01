@@ -24,8 +24,10 @@ import { loadWebMapConfig } from "../web/src/mapConfig.ts";
 import {
   createAnonymousSession,
   createAnonymousSessionCoordinator,
+  deleteAllUserData,
   saveRoute,
 } from "../web/src/userDataApi.ts";
+import { loadLegalConfig } from "../web/src/legal.ts";
 import type {
   PlanRoutesApiRequest,
   PlanRoutesApiResponse,
@@ -368,6 +370,44 @@ test("anonymous session and save clients send bearer-scoped contracts", async ()
       "idempotency-key"
     ],
     "save-test-1",
+  );
+});
+
+test("loads public legal config and deletes all anonymous device data", async () => {
+  const calls: Array<{
+    input: RequestInfo | URL;
+    init?: RequestInit;
+  }> = [];
+  const fetcher: RouteApiFetch = async (input, init) => {
+    calls.push({ input, init });
+    if (input === "/api/v1/legal-config") {
+      return Response.json({
+        schemaVersion: "1",
+        documentVersion: "2026-08-01",
+        configured: true,
+        operatorName: "找路测试运营者",
+        privacyContact: "privacy@example.test",
+        logRetentionDays: 30,
+      });
+    }
+    return Response.json({
+      schemaVersion: "1",
+      requestId: "delete-all-test",
+      deleted: true,
+    });
+  };
+
+  const legal = await loadLegalConfig(fetcher);
+  await deleteAllUserData("session-token", fetcher);
+
+  assert.equal(legal.operatorName, "找路测试运营者");
+  assert.equal(calls[0]?.input, "/api/v1/legal-config");
+  assert.equal(calls[1]?.input, "/api/v1/session");
+  assert.equal(calls[1]?.init?.method, "DELETE");
+  assert.equal(
+    (calls[1]?.init?.headers as Record<string, string>)
+      .authorization,
+    "Bearer session-token",
   );
 });
 

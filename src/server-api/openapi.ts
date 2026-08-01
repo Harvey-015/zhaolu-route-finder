@@ -96,6 +96,42 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/legal-config": {
+      get: {
+        operationId: "getLegalDocumentConfig",
+        description:
+          "Returns public operator and privacy-contact information for the legal documents.",
+        responses: {
+          "200": {
+            description: "Public legal-document configuration.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: [
+                    "schemaVersion",
+                    "documentVersion",
+                    "configured",
+                  ],
+                  properties: {
+                    schemaVersion: { const: "1" },
+                    documentVersion: { type: "string" },
+                    configured: { type: "boolean" },
+                    operatorName: { type: "string" },
+                    privacyContact: { type: "string" },
+                    logRetentionDays: {
+                      type: "integer",
+                      minimum: 1,
+                      maximum: 365,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     "/api/v1/openapi.json": {
       get: {
         operationId: "getOpenApiDocument",
@@ -188,6 +224,21 @@ export const SERVER_API_OPENAPI_DOCUMENT = {
                 },
               },
             },
+          },
+          ...RUNTIME_ERROR_RESPONSES,
+        },
+      },
+      delete: {
+        operationId: "deleteAnonymousSessionData",
+        description:
+          "Deletes the authenticated anonymous session and cascades all saved routes and field reports.",
+        security: [{ bearerSession: [] }],
+        responses: {
+          "200": {
+            description: "All data for the anonymous session was deleted.",
+          },
+          "401": {
+            $ref: "#/components/responses/ErrorResponse",
           },
           ...RUNTIME_ERROR_RESPONSES,
         },

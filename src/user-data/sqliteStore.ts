@@ -190,6 +190,13 @@ export class SqliteUserDataStore implements UserDataStore {
     );
   }
 
+  deleteUserData(userId: string): boolean {
+    const result = this.database
+      .prepare("DELETE FROM user_sessions WHERE user_id = ?")
+      .run(userId);
+    return result.changes === 1;
+  }
+
   saveRoute(record: SavedRouteRecord): void {
     this.database
       .prepare(

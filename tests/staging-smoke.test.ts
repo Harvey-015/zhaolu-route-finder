@@ -48,12 +48,22 @@ function stagingFetcher(
         serviceHost: "/_AMapService",
       });
     }
+    if (url.pathname === "/api/v1/legal-config") {
+      return json({
+        documentVersion: "2026-08-01",
+        configured: true,
+        operatorName: "找路测试运营者",
+        privacyContact: "privacy@example.test",
+        logRetentionDays: 30,
+      });
+    }
     if (url.pathname === "/api/v1/openapi.json") {
       return json({
         openapi: "3.1.0",
         paths: {
           "/api/v1/routes/plan": {},
           "/api/v1/map-config": {},
+          "/api/v1/legal-config": {},
         },
       });
     }
@@ -113,12 +123,13 @@ test("validates staging edge, contracts, map config, and one live route", async 
   });
 
   assert.equal(result.status, "passed");
-  assert.equal(result.requestCount, 7);
+  assert.equal(result.requestCount, 8);
   assert.deepEqual(fixture.paths, [
     "GET /api/v1/health",
     "GET /api/v1/ready",
     "GET /api/v1/capabilities",
     "GET /api/v1/map-config",
+    "GET /api/v1/legal-config",
     "GET /api/v1/openapi.json",
     "GET /",
     "POST /api/v1/routes/plan",
@@ -147,7 +158,7 @@ test("fails closed for non-HTTPS staging and missing edge HSTS", async () => {
   });
   assert.equal(missingHsts.status, "failed");
   assert.equal(missingHsts.code, "STAGING_WEB_SECURITY_INVALID");
-  assert.equal(missingHsts.requestCount, 6);
+  assert.equal(missingHsts.requestCount, 7);
 });
 
 test("checks the explicitly expected AMap export policy", async () => {

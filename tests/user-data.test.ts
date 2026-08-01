@@ -210,6 +210,74 @@ test("stores only metadata for an AMap route policy", () => {
   }
 });
 
+test("deletes an anonymous session with all saved routes and feedback", async () => {
+  const now = 1_800_000_000_000;
+  const store = new SqliteUserDataStore(":memory:");
+  const userData = new UserDataService({
+    store,
+    sessions: new SignedSessionService(
+      "test-session-secret-at-least-32-characters",
+      { now: () => now },
+    ),
+    policyResolver: resolveFixtureRouteDeliveryPolicy,
+    now: () => now,
+  });
+  const handler = createServerApi({
+    planRoutes: async () => {
+      throw new Error("not used");
+    },
+    userData,
+  });
+
+  try {
+    const session = userData.issueSession();
+    const authRequest = new Request("http://localhost", {
+      headers: {
+        authorization: "Bearer " + session.token,
+      },
+    });
+    const userId = userData.authenticate(authRequest);
+    const saved = userData.saveRoute(userId, {
+      schemaVersion: "1",
+      name: "待全部删除",
+      request: REQUEST,
+      route: DELIVERY_TEST_ROUTE,
+    });
+    userData.addFieldReport(userId, saved.id, {
+      schemaVersion: "1",
+      rating: 4,
+      note: "测试反馈",
+    });
+
+    const response = await handler(
+      jsonRequest(
+        "/api/v1/session",
+        "DELETE",
+        undefined,
+        session.token,
+      ),
+    );
+    const body = (await response.json()) as {
+      requestId: string;
+      deleted: boolean;
+    };
+    assert.equal(response.status, 200);
+    assert.equal(typeof body.requestId, "string");
+    assert.equal(body.deleted, true);
+    assert.equal(store.hasSession(userId, now), false);
+    assert.deepEqual(store.listSavedRoutes(userId, now), []);
+    assert.equal(store.getSavedRoute(userId, saved.id, now), null);
+    assert.throws(
+      () => userData.authenticate(authRequest),
+      (error: unknown) =>
+        error instanceof UserDataError &&
+        error.code === "UNAUTHORIZED",
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("rejects malformed saved-route inputs before persistence", () => {
   const now = 1_800_000_000_000;
   const store = new SqliteUserDataStore(":memory:");

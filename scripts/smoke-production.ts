@@ -72,6 +72,21 @@ export async function runProductionSmoke(): Promise<ProductionSmokeResult> {
     }
     checks.push("capabilities");
 
+    const legalConfig = await requestJson(
+      "/api/v1/legal-config",
+    );
+    if (
+      legalConfig.configured !== true ||
+      typeof legalConfig.operatorName !== "string" ||
+      !legalConfig.operatorName ||
+      typeof legalConfig.privacyContact !== "string" ||
+      !legalConfig.privacyContact ||
+      typeof legalConfig.logRetentionDays !== "number"
+    ) {
+      throw new Error("SMOKE_LEGAL_CONFIG_INVALID");
+    }
+    checks.push("legal-config");
+
     const homeResponse = await fetch(origin, {
       headers: {
         accept: "text/html",

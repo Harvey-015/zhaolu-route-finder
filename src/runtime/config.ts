@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import type { LegalDocumentConfig } from "../legal/config.ts";
 
 export type RuntimeLogLevel = "info" | "error";
 
@@ -16,6 +17,7 @@ export type RuntimeConfig = Readonly<{
     securityCode: string;
     publicOrigin: string;
   }>;
+  legalDocuments: LegalDocumentConfig;
   sessionSecret: string;
   observabilityToken: string;
   databasePath: string;
@@ -90,6 +92,21 @@ function requiredValue(
 ): string {
   const value = environment[name]?.trim() ?? "";
   if (!value) throw new RangeError(`${name}_REQUIRED`);
+  return value;
+}
+
+function requiredPublicText(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  maximumLength: number,
+): string {
+  const value = requiredValue(environment, name);
+  if (
+    value.length > maximumLength ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new RangeError(`${name}_INVALID`);
+  }
   return value;
 }
 
@@ -196,6 +213,25 @@ export function loadRuntimeConfig(
       ? { amapRouteExportAuthorizationReference }
       : {}),
     ...(amapWebMap ? { amapWebMap } : {}),
+    legalDocuments: Object.freeze({
+      operatorName: requiredPublicText(
+        environment,
+        "ZHAOLU_OPERATOR_NAME",
+        100,
+      ),
+      privacyContact: requiredPublicText(
+        environment,
+        "ZHAOLU_PRIVACY_CONTACT",
+        200,
+      ),
+      logRetentionDays: integer(
+        environment,
+        "ZHAOLU_LOG_RETENTION_DAYS",
+        30,
+        1,
+        365,
+      ),
+    }),
     sessionSecret: requiredSecret(
       environment,
       "ZHAOLU_SESSION_SECRET",

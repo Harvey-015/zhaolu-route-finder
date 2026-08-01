@@ -169,6 +169,11 @@ test("exposes stable health and capability discovery endpoints", async () => {
       key: "public-web-key",
       serviceHost: "/_AMapService",
     },
+    legalConfig: {
+      operatorName: "找路测试运营者",
+      privacyContact: "privacy@example.test",
+      logRetentionDays: 30,
+    },
   });
 
   const health = await handler(
@@ -186,6 +191,9 @@ test("exposes stable health and capability discovery endpoints", async () => {
   const mapConfig = await handler(
     new Request("http://localhost/api/v1/map-config"),
   );
+  const legalConfig = await handler(
+    new Request("http://localhost/api/v1/legal-config"),
+  );
   const healthBody = (await health.json()) as Record<string, unknown>;
   const readinessBody =
     (await readiness.json()) as Record<string, unknown>;
@@ -193,6 +201,8 @@ test("exposes stable health and capability discovery endpoints", async () => {
     (await capabilities.json()) as Record<string, unknown>;
   const mapConfigBody =
     (await mapConfig.json()) as Record<string, unknown>;
+  const legalConfigBody =
+    (await legalConfig.json()) as Record<string, unknown>;
   const openApiBody = (await openApi.json()) as {
     openapi: string;
     paths: Record<
@@ -224,8 +234,10 @@ test("exposes stable health and capability discovery endpoints", async () => {
   assert.equal(openApiBody.openapi, "3.1.0");
   assert.ok("/api/v1/ready" in openApiBody.paths);
   assert.ok("/api/v1/map-config" in openApiBody.paths);
+  assert.ok("/api/v1/legal-config" in openApiBody.paths);
   assert.ok("/api/v1/routes/plan" in openApiBody.paths);
   assert.ok("/api/v1/session" in openApiBody.paths);
+  assert.ok("delete" in openApiBody.paths["/api/v1/session"]);
   assert.ok("/api/v1/saved-routes" in openApiBody.paths);
   assert.ok(
     "429" in
@@ -256,6 +268,15 @@ test("exposes stable health and capability discovery endpoints", async () => {
     providerId: "amap-jsapi",
     key: "public-web-key",
     serviceHost: "/_AMapService",
+  });
+  assert.equal(legalConfig.status, 200);
+  assert.deepEqual(legalConfigBody, {
+    schemaVersion: "1",
+    documentVersion: "2026-08-01",
+    configured: true,
+    operatorName: "找路测试运营者",
+    privacyContact: "privacy@example.test",
+    logRetentionDays: 30,
   });
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(

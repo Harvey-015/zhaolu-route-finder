@@ -678,6 +678,12 @@ export class UserDataService {
     }
   }
 
+  deleteAllUserData(userId: string): void {
+    if (!this.store.deleteUserData(userId)) {
+      throw new UserDataError(401, "UNAUTHORIZED");
+    }
+  }
+
   addFieldReport(
     userId: string,
     routeId: string,
