@@ -91,6 +91,8 @@ export type FindScenicRoutesLimits = Readonly<{
   maxProviderHttpAttempts: number;
   maxConcurrentRouteRequests: number;
   maxSceneryAnchors: number;
+  maxSceneryAnchorWaitMs: number;
+  maxSceneryAnalysisWaitMs: number;
   maxOverlapRatio: number;
 }>;
 

@@ -25,8 +25,10 @@ const DEFAULT_LIMITS: FindScenicRoutesLimits = {
   maxCandidates: 6,
   maxRouteProviderCalls: 6,
   maxProviderHttpAttempts: 24,
-  maxConcurrentRouteRequests: 2,
+  maxConcurrentRouteRequests: 3,
   maxSceneryAnchors: 24,
+  maxSceneryAnchorWaitMs: 1_500,
+  maxSceneryAnalysisWaitMs: 1_500,
   maxOverlapRatio: 0.82,
 };
 
@@ -95,6 +97,8 @@ function normalizeLimits(
     "maxProviderHttpAttempts",
     "maxConcurrentRouteRequests",
     "maxSceneryAnchors",
+    "maxSceneryAnchorWaitMs",
+    "maxSceneryAnalysisWaitMs",
   ] as const;
   integerKeys.forEach((key) => {
     if (!Number.isInteger(limits[key]) || limits[key] < 1) {
@@ -270,6 +274,40 @@ async function mapSettledWithConcurrency<Input, Output>(
   return results;
 }
 
+type SoftWaitResult<T> =
+  | PromiseSettledResult<T>
+  | Readonly<{ status: "timed-out" }>;
+
+async function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<SoftWaitResult<T>> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<Readonly<{ status: "timed-out" }>>(
+    (resolve) => {
+      timeout = setTimeout(
+        () => resolve({ status: "timed-out" }),
+        timeoutMs,
+      );
+    },
+  );
+  const settled: Promise<PromiseSettledResult<T>> = promise.then(
+    (value): PromiseFulfilledResult<T> => ({
+      status: "fulfilled",
+      value,
+    }),
+    (reason: unknown): PromiseRejectedResult => ({
+      status: "rejected",
+      reason,
+    }),
+  );
+  try {
+    return await Promise.race([settled, timedOut]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
 function assertValidRoute(route: RoutedRoute) {
   if (
     route.geometry.length < 2 ||
@@ -340,34 +378,39 @@ export async function findScenicRoutes(
   throwIfAborted(dependencies.signal);
 
   let scenicAnchors: ScenicAnchor[] = [];
-  try {
-    scenicAnchors = [
-      ...(await dependencies.sceneryProvider.findAnchors(
-        {
-          origin: start.point,
-          targetDistanceMeters: request.targetDistanceMeters,
-          preferences: request.preferences,
-          limit: limits.maxSceneryAnchors,
-        },
-        context,
-      )),
-    ];
-  } catch (error) {
+  const anchorAttempt = await settleWithin(
+    dependencies.sceneryProvider.findAnchors(
+      {
+        origin: start.point,
+        targetDistanceMeters: request.targetDistanceMeters,
+        preferences: request.preferences,
+        limit: limits.maxSceneryAnchors,
+      },
+      context,
+    ),
+    limits.maxSceneryAnchorWaitMs,
+  );
+  if (anchorAttempt.status === "fulfilled") {
+    scenicAnchors = [...anchorAttempt.value];
+  } else {
     throwIfAborted(dependencies.signal);
     warnings.push({
       code: "SCENERY_ANCHORS_UNAVAILABLE",
       params: {
         providerId:
-          error instanceof ProviderError
-            ? error.providerId
+          anchorAttempt.status === "rejected" &&
+          anchorAttempt.reason instanceof ProviderError
+            ? anchorAttempt.reason.providerId
             : dependencies.sceneryProvider.id,
       },
     });
   }
 
+  const maxResults = request.maxResults ?? 3;
   const candidateCount = Math.min(
     limits.maxCandidates,
     limits.maxRouteProviderCalls,
+    maxResults,
   );
   let candidates: RouteCandidate[];
   try {
@@ -430,19 +473,24 @@ export async function findScenicRoutes(
     string,
     ReturnType<typeof unavailableScenicFeatures>
   > = new Map();
-  try {
-    featuresByRoute = await dependencies.sceneryProvider.analyzeRoutes(
+  const analysisAttempt = await settleWithin(
+    dependencies.sceneryProvider.analyzeRoutes(
       { routes: routedRoutes, preferences: request.preferences },
       context,
-    );
-  } catch (error) {
+    ),
+    limits.maxSceneryAnalysisWaitMs,
+  );
+  if (analysisAttempt.status === "fulfilled") {
+    featuresByRoute = analysisAttempt.value;
+  } else {
     throwIfAborted(dependencies.signal);
     warnings.push({
       code: "SCENERY_FEATURES_UNAVAILABLE",
       params: {
         providerId:
-          error instanceof ProviderError
-            ? error.providerId
+          analysisAttempt.status === "rejected" &&
+          analysisAttempt.reason instanceof ProviderError
+            ? analysisAttempt.reason.providerId
             : dependencies.sceneryProvider.id,
       },
     });
@@ -478,7 +526,6 @@ export async function findScenicRoutes(
     };
   });
 
-  const maxResults = request.maxResults ?? 3;
   let selectedRoutes: RecommendedRoute[];
   try {
     selectedRoutes = constrainSelectedRoutes(

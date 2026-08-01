@@ -213,9 +213,9 @@ test("returns three deterministic routes using only fake providers", async () =>
     result.warnings.some(({ code }) => code === "SCENERY_FEATURES_MISSING"),
     false,
   );
-  assert.equal(result.diagnostics.generatedCandidateCount, 6);
-  assert.equal(result.diagnostics.routedCandidateCount, 6);
-  assert.equal(fakeDependencies.routeProvider.calls.length, 6);
+  assert.equal(result.diagnostics.generatedCandidateCount, 3);
+  assert.equal(result.diagnostics.routedCandidateCount, 3);
+  assert.equal(fakeDependencies.routeProvider.calls.length, 3);
   assert.ok(
     result.routes.every(
       ({ route, scenicFeatures }) =>
@@ -251,7 +251,7 @@ test("uses an injected candidate generation strategy", async () => {
   });
 
   assert.equal(receivedMode, "running");
-  assert.equal(receivedCount, 6);
+  assert.equal(receivedCount, 2);
   assert.deepEqual(
     routeProvider.calls.map(({ candidate }) => candidate.id),
     ["custom-candidate-1", "custom-candidate-2"],
@@ -274,8 +274,8 @@ test("uses an injected route selection strategy and enforces maxResults", async 
 
   assert.equal(receivedLimit, 2);
   assert.equal(result.routes.length, 2);
-  assert.ok(result.routes[0].route.candidateId.endsWith("06"));
-  assert.ok(result.routes[1].route.candidateId.endsWith("05"));
+  assert.ok(result.routes[0].route.candidateId.endsWith("02"));
+  assert.ok(result.routes[1].route.candidateId.endsWith("01"));
 });
 
 test("maps an unknown candidate strategy failure to a safe INTERNAL_ERROR", async () => {
@@ -413,6 +413,37 @@ test("degrades cleanly when scenery anchors and analysis are unavailable", async
         scenicFeatures.availability === "unavailable",
     ),
   );
+  assert.ok(
+    result.warnings.some(
+      ({ code }) => code === "SCENERY_ANCHORS_UNAVAILABLE",
+    ),
+  );
+  assert.ok(
+    result.warnings.some(
+      ({ code }) => code === "SCENERY_FEATURES_UNAVAILABLE",
+    ),
+  );
+});
+
+test("returns routes within soft scenery wait budgets", async () => {
+  const never = () => new Promise<never>(() => {});
+  const startedAt = Date.now();
+  const result = await findScenicRoutes(request(), {
+    ...dependencies(),
+    sceneryProvider: {
+      id: "slow-scenery",
+      findAnchors: never,
+      analyzeRoutes: never,
+    },
+    limits: {
+      maxSceneryAnchorWaitMs: 5,
+      maxSceneryAnalysisWaitMs: 5,
+    },
+  });
+
+  assert.ok(Date.now() - startedAt < 250);
+  assert.equal(result.routes.length, 3);
+  assert.equal(result.status, "partial");
   assert.ok(
     result.warnings.some(
       ({ code }) => code === "SCENERY_ANCHORS_UNAVAILABLE",
@@ -646,7 +677,7 @@ test("never exceeds the configured route-provider concurrency", async () => {
     },
   };
 
-  await findScenicRoutes(request(), {
+  await findScenicRoutes(request({ maxResults: 5 }), {
     ...defaultStrategies,
     placeProvider: new FakePlaceProvider({ "杭州西湖": startPlace }),
     routeProvider,

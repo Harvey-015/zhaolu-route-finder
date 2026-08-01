@@ -16,6 +16,8 @@ const DEFAULT_BASE_URL =
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_TILES = 16;
 const DEFAULT_MAX_GRID_DIMENSION = 320;
+const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60_000;
+const DEFAULT_MAX_CACHED_GRIDS = 32;
 const TILE_SIZE_DEGREES = 3;
 
 export type WorldCoverTileReadRequest = Readonly<{
@@ -36,7 +38,15 @@ export type CogWorldCoverRasterSourceOptions = Readonly<{
   timeoutMs?: number;
   maxTiles?: number;
   maxGridDimension?: number;
+  cacheTtlMs?: number;
+  maxCachedGrids?: number;
+  now?: () => number;
   tileReader?: WorldCoverTileReader;
+}>;
+
+type CachedGrid = Readonly<{
+  expiresAt: number;
+  grid: WorldCoverGrid;
 }>;
 
 function assertPositiveInteger(
@@ -46,6 +56,27 @@ function assertPositiveInteger(
   if (!Number.isInteger(value) || value < 1) {
     throw new RangeError(errorCode);
   }
+}
+
+function assertNonNegativeInteger(
+  value: number,
+  errorCode: string,
+): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(errorCode);
+  }
+}
+
+function gridCacheKey(request: WorldCoverGridRequest): string {
+  const { bounds } = request;
+  return [
+    bounds.minLongitude,
+    bounds.minLatitude,
+    bounds.maxLongitude,
+    bounds.maxLatitude,
+    request.width,
+    request.height,
+  ].join(":");
 }
 
 function defaultTileReader(
@@ -124,16 +155,26 @@ function tileName(
   ].join("");
 }
 
-function abortPromise(signal: AbortSignal): Promise<never> {
-  return new Promise((_, reject) => {
+function withAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(signal.reason);
       return;
     }
-    signal.addEventListener(
-      "abort",
-      () => reject(signal.reason),
-      { once: true },
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
     );
   });
 }
@@ -146,7 +187,11 @@ export class CogWorldCoverRasterSource
   private readonly timeoutMs: number;
   private readonly maxTiles: number;
   private readonly maxGridDimension: number;
+  private readonly cacheTtlMs: number;
+  private readonly maxCachedGrids: number;
+  private readonly now: () => number;
   private readonly tileReader: WorldCoverTileReader;
+  private readonly cache = new Map<string, CachedGrid>();
 
   constructor(options: CogWorldCoverRasterSourceOptions = {}) {
     this.providerId = options.providerId ?? "worldcover-scenery";
@@ -167,6 +212,10 @@ export class CogWorldCoverRasterSource
     this.maxTiles = options.maxTiles ?? DEFAULT_MAX_TILES;
     this.maxGridDimension =
       options.maxGridDimension ?? DEFAULT_MAX_GRID_DIMENSION;
+    this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+    this.maxCachedGrids =
+      options.maxCachedGrids ?? DEFAULT_MAX_CACHED_GRIDS;
+    this.now = options.now ?? (() => Date.now());
     assertPositiveInteger(
       this.timeoutMs,
       "WORLDCOVER_TIMEOUT_INVALID",
@@ -179,7 +228,43 @@ export class CogWorldCoverRasterSource
       this.maxGridDimension,
       "WORLDCOVER_MAX_GRID_DIMENSION_INVALID",
     );
+    assertNonNegativeInteger(
+      this.cacheTtlMs,
+      "WORLDCOVER_CACHE_TTL_INVALID",
+    );
+    assertPositiveInteger(
+      this.maxCachedGrids,
+      "WORLDCOVER_MAX_CACHED_GRIDS_INVALID",
+    );
     this.tileReader = options.tileReader ?? defaultTileReader;
+  }
+
+  private cachedGrid(key: string): WorldCoverGrid | undefined {
+    const now = this.now();
+    for (const [candidateKey, entry] of this.cache) {
+      if (entry.expiresAt <= now) this.cache.delete(candidateKey);
+    }
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.grid;
+  }
+
+  private rememberGrid(key: string, grid: WorldCoverGrid): void {
+    if (this.cacheTtlMs === 0) return;
+    this.cache.delete(key);
+    this.cache.set(key, {
+      expiresAt: this.now() + this.cacheTtlMs,
+      grid,
+    });
+    while (this.cache.size > this.maxCachedGrids) {
+      const oldestKey = this.cache.keys().next().value as
+        | string
+        | undefined;
+      if (oldestKey === undefined) break;
+      this.cache.delete(oldestKey);
+    }
   }
 
   async readGrid(
@@ -198,6 +283,9 @@ export class CogWorldCoverRasterSource
     if (context.signal?.aborted) {
       throw worldCoverProviderError(this.providerId, "ABORTED");
     }
+    const cacheKey = gridCacheKey(request);
+    const cached = this.cachedGrid(cacheKey);
+    if (cached) return cached;
 
     const latitudeOrigins = tileOrigins(
       request.bounds.minLatitude,
@@ -229,14 +317,13 @@ export class CogWorldCoverRasterSource
     }, this.timeoutMs);
 
     try {
-      const values = new Uint8Array(request.width * request.height);
-      for (const latitudeOrigin of latitudeOrigins) {
-        for (const longitudeOrigin of longitudeOrigins) {
+      const tileRequests = latitudeOrigins.flatMap((latitudeOrigin) =>
+        longitudeOrigins.map((longitudeOrigin) => {
           const url = new URL(
             tileName(latitudeOrigin, longitudeOrigin),
             this.baseUrl,
           );
-          const raster = await Promise.race([
+          return withAbort(
             this.tileReader({
               url,
               bounds: request.bounds,
@@ -244,36 +331,42 @@ export class CogWorldCoverRasterSource
               height: request.height,
               signal: controller.signal,
             }),
-            abortPromise(controller.signal),
-          ]);
-          if (raster.length !== values.length) {
+            controller.signal,
+          );
+        }),
+      );
+      const rasters = await Promise.all(tileRequests);
+      const values = new Uint8Array(request.width * request.height);
+      for (const raster of rasters) {
+        if (raster.length !== values.length) {
+          throw worldCoverProviderError(
+            this.providerId,
+            "INVALID_RESPONSE",
+          );
+        }
+        for (let index = 0; index < raster.length; index += 1) {
+          const value = raster[index];
+          if (
+            typeof value !== "number" ||
+            !isWorldCoverClassCode(value)
+          ) {
             throw worldCoverProviderError(
               this.providerId,
               "INVALID_RESPONSE",
             );
           }
-          for (let index = 0; index < raster.length; index += 1) {
-            const value = raster[index];
-            if (
-              typeof value !== "number" ||
-              !isWorldCoverClassCode(value)
-            ) {
-              throw worldCoverProviderError(
-                this.providerId,
-                "INVALID_RESPONSE",
-              );
-            }
-            if (value !== 0) values[index] = value;
-          }
+          if (value !== 0) values[index] = value;
         }
       }
 
-      return {
+      const grid = {
         bounds: request.bounds,
         width: request.width,
         height: request.height,
         values,
       };
+      this.rememberGrid(cacheKey, grid);
+      return grid;
     } catch (error) {
       if (error instanceof ProviderError) {
         throw error;

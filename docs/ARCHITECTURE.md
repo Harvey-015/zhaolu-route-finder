@@ -880,6 +880,19 @@ Core 不反向依赖 Adapters
 - 实际发布需要外部容器平台、域名、TLS、Secret 和持久卷；
 - 横向扩容前按实际负载引入 Redis 与 PostgreSQL/PostGIS。
 
+### 14.1 在线推荐性能策略
+
+- 候选数量由请求的 `maxResults` 决定，并继续受 `maxCandidates` 与
+  `maxRouteProviderCalls` 双重上限保护；默认不会为了返回一条路线固定生成六条候选。
+- 道路 Provider 使用有上限的候选并发，默认最多同时处理三个候选；物理 HTTP 调用预算、
+  每分钟配额和取消信号仍由核心统一约束。
+- 风景 Provider 有独立的锚点与评分软等待预算。环境数据过慢时先返回真实道路路线和
+  `partial` 警告，不占满 API 的总超时。
+- WorldCover Adapter 在同一请求中复用一份栅格，并缓存已成功读取的相同窗口 24 小时；
+  缓存最多保留 32 个窗口。新的卫星或环境 Provider 可以在各自 Adapter 内实现等价策略，
+  不改变推荐核心和 Web UI。
+- 地图 Renderer 独立于路线结果加载。真实底图可以先显示，路线与环境评分随后叠加。
+
 ## 15. 架构决策摘要
 
 | 决策 | 选择 |

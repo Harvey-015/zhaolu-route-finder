@@ -457,6 +457,8 @@ input:focus-visible,
 }
 
 .map-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding: 18px;
   background: #deddd5;
@@ -464,12 +466,17 @@ input:focus-visible,
 
 .route-map-wrap,
 .map-empty {
+  flex: 1 1 auto;
   min-height: 100%;
   position: relative;
   overflow: hidden;
   background: var(--forest-deep);
   border-radius: 18px;
   color: #e8f0e8;
+}
+
+.amap-map-wrap {
+  min-height: 600px;
 }
 
 .map-empty {
@@ -541,9 +548,11 @@ input:focus-visible,
 }
 
 .amap-map-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 600px;
+  min-height: 0;
 }
 
 .location-action {
@@ -1579,7 +1588,7 @@ footer {
     min-height: 490px;
   }
 
-  .amap-map-canvas {
+  .amap-map-wrap {
     min-height: 490px;
   }
 
@@ -1610,7 +1619,7 @@ footer {
     min-height: 410px;
   }
 
-  .amap-map-canvas {
+  .amap-map-wrap {
     min-height: 410px;
   }
 

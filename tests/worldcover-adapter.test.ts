@@ -132,6 +132,37 @@ test("builds all intersecting ESA 3-degree tile URLs with fixed-width coordinate
   assert.deepEqual([...grid.values], [10, 10, 10, 10]);
 });
 
+test("caches identical raster windows until the configured TTL expires", async () => {
+  let reads = 0;
+  let now = 1_000;
+  const source = new CogWorldCoverRasterSource({
+    cacheTtlMs: 100,
+    now: () => now,
+    tileReader: async () => {
+      reads += 1;
+      return new Uint8Array([10]);
+    },
+  });
+  const request = {
+    bounds: {
+      minLongitude: 120,
+      minLatitude: 30,
+      maxLongitude: 120.01,
+      maxLatitude: 30.01,
+    },
+    width: 1,
+    height: 1,
+  } as const;
+
+  await source.readGrid(request, { requestId: "cache-first" });
+  await source.readGrid(request, { requestId: "cache-second" });
+  assert.equal(reads, 1);
+
+  now += 101;
+  await source.readGrid(request, { requestId: "cache-expired" });
+  assert.equal(reads, 2);
+});
+
 test("rejects malformed or unknown WorldCover raster values", async () => {
   const wrongLength = new CogWorldCoverRasterSource({
     tileReader: async () => new Uint8Array([10]),
@@ -333,6 +364,34 @@ test("converts raster classes into partial scenic features for every route", asy
   });
 });
 
+test("reuses one request grid for anchors and route analysis", async () => {
+  const source = new FixtureRasterSource(await fixtureGrid());
+  const provider = new WorldCoverSceneryProvider({
+    rasterSource: source,
+  });
+  const sharedContext = { requestId: "shared-grid-request" } as const;
+
+  await provider.findAnchors(
+    {
+      origin: wgs84Point(120.006, 30.006),
+      targetDistanceMeters: 5_000,
+      preferences,
+      limit: 4,
+    },
+    sharedContext,
+  );
+  const features = await provider.analyzeRoutes(
+    {
+      routes: [route("shared", 120.002, 30.004, 30.008)],
+      preferences,
+    },
+    sharedContext,
+  );
+
+  assert.equal(source.calls.length, 1);
+  assert.equal(features.get("shared")?.availability, "partial");
+});
+
 test("does not read a raster when there are no routes", async () => {
   const source = new FixtureRasterSource(await fixtureGrid());
   const provider = new WorldCoverSceneryProvider({
@@ -349,8 +408,10 @@ test("does not read a raster when there are no routes", async () => {
 });
 
 test("preserves stable raster-source failures for core-level degradation", async () => {
+  let reads = 0;
   const rasterSource: WorldCoverRasterSource = {
     async readGrid() {
+      reads += 1;
       throw new ProviderError({
         providerId: "worldcover-scenery",
         code: "UNAVAILABLE",
@@ -375,4 +436,16 @@ test("preserves stable raster-source failures for core-level degradation", async
       error.code === "UNAVAILABLE" &&
       error.message === "WORLDCOVER_SERVICE_UNAVAILABLE",
   );
+  await assert.rejects(
+    provider.analyzeRoutes(
+      {
+        routes: [route("failed-grid", 120.002, 30.004, 30.008)],
+        preferences,
+      },
+      context,
+    ),
+    (error: unknown) =>
+      error instanceof ProviderError && error.code === "UNAVAILABLE",
+  );
+  assert.equal(reads, 1);
 });

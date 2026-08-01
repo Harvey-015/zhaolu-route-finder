@@ -375,7 +375,7 @@ export function AmapBasemap({
     };
   }, []);
 
-  if (props.routes.length === 0 || !config?.enabled) {
+  if (!config?.enabled) {
     return <RouteMap {...props} />;
   }
   const enabledReferences =
