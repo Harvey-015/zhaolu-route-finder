@@ -1,0 +1,53 @@
+name: staging-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS origin of the staging deployment
+        required: true
+        type: string
+      expected_web_map:
+        description: Expect the AMap JS basemap to be configured
+        required: true
+        default: true
+        type: boolean
+      expected_route_exports:
+        description: Expect authorized AMap GPX and GeoJSON exports
+        required: true
+        default: false
+        type: boolean
+      start_query:
+        description: Public place query used by the single live plan request
+        required: true
+        default: 杭州黄龙体育中心
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run smoke:staging
+        env:
+          STAGING_BASE_URL: ${{ inputs.base_url }}
+          STAGING_EXPECT_WEB_MAP: ${{ inputs.expected_web_map }}
+          STAGING_EXPECT_ROUTE_EXPORTS: ${{ inputs.expected_route_exports }}
+          STAGING_SMOKE_START_QUERY: ${{ inputs.start_query }}

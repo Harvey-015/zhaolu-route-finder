@@ -1,0 +1,37 @@
+services:
+  zhaolu:
+    image: ${ZHAOLU_IMAGE:?immutable image tag or digest required}
+    pull_policy: always
+    environment:
+      AMAP_WEB_SERVICE_KEY: ${AMAP_WEB_SERVICE_KEY:?required}
+      AMAP_WEB_JS_KEY: ${AMAP_WEB_JS_KEY:?required}
+      AMAP_JS_SECURITY_CODE: ${AMAP_JS_SECURITY_CODE:?required}
+      AMAP_CITY: ${AMAP_CITY:-杭州}
+      AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN: ${AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN:-24}
+      AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE: ${AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE:-120}
+      AMAP_ROUTE_EXPORTS_ALLOWED: ${AMAP_ROUTE_EXPORTS_ALLOWED:-false}
+      AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE: ${AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE:-}
+      ZHAOLU_SESSION_SECRET: ${ZHAOLU_SESSION_SECRET:?required}
+      ZHAOLU_OBSERVABILITY_TOKEN: ${ZHAOLU_OBSERVABILITY_TOKEN:?required}
+      ZHAOLU_PUBLIC_ORIGIN: ${ZHAOLU_PUBLIC_ORIGIN:?required}
+      ZHAOLU_TRUSTED_PROXY_RANGES: ${ZHAOLU_TRUSTED_PROXY_RANGES:-}
+      RATE_LIMIT_PLAN_PER_MINUTE: ${RATE_LIMIT_PLAN_PER_MINUTE:-15}
+      RATE_LIMIT_SESSION_PER_HOUR: ${RATE_LIMIT_SESSION_PER_HOUR:-10}
+      RATE_LIMIT_USER_DATA_PER_MINUTE: ${RATE_LIMIT_USER_DATA_PER_MINUTE:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${ZHAOLU_BIND_ADDRESS:-127.0.0.1}:${ZHAOLU_BIND_PORT:-8787}:8787"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 15s
+    volumes:
+      - zhaolu-staging-data:/app/data
+
+volumes:
+  zhaolu-staging-data:

@@ -136,6 +136,9 @@ pnpm run smoke:production
 烟雾只发 4 个只读请求：health、ready、capabilities 和 Web 首页；不会调用路线
 Provider，也不消耗高德或 WorldCover 配额。
 
+预发布环境另有包含 1 次真实高德路线规划的受控验收，以及只读容器、不可变镜像、
+HTTPS/HSTS 和回滚要求，见 `docs/STAGING.md`。该验收不能直接在生产环境例行运行。
+
 ## 发布门禁
 
 `.github/workflows/ci.yml` 在 push 和 PR 上执行：
