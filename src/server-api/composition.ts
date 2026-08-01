@@ -61,6 +61,7 @@ export type ProductionRoutePlannerOptions = Readonly<{
   amapWebServiceKey: string;
   amapCity?: string;
   amapMaxHttpAttemptsPerMinute?: number;
+  sceneryProvider?: SceneryProvider;
   algorithm?: RecommendationAlgorithmProfile;
   limits?: Partial<FindScenicRoutesLimits>;
 }>;
@@ -76,7 +77,8 @@ export function createProductionRoutePlanner(
     city: options.amapCity,
   });
   const routeProvider = new AmapRouteProvider(client);
-  const sceneryProvider = new WorldCoverSceneryProvider();
+  const sceneryProvider =
+    options.sceneryProvider ?? new WorldCoverSceneryProvider();
 
   return createRoutePlanner({
     placeProvider,

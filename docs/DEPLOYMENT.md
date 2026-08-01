@@ -1,5 +1,9 @@
 # 部署与运行保障
 
+本页描述 Node 容器 + SQLite 部署。面向开源演示站的 Cloudflare Workers + D1 + R2
+部署见 [Cloudflare 部署文档](CLOUDFLARE_DEPLOYMENT.md)；两种方式共享核心代码，
+互不替代。
+
 第七阶段提供单容器模块化单体：同一个 Node 进程提供 `/api/v1`、构建后的 React
 静态文件、就绪探针和受保护的 Prometheus 指标。
 

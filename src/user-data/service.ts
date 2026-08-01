@@ -587,34 +587,34 @@ export class UserDataService {
     this.now = options.now ?? (() => Date.now());
   }
 
-  issueSession(): Readonly<{
+  async issueSession(): Promise<Readonly<{
     token: string;
     expiresAt: number;
-  }> {
+  }>> {
     const issued = this.sessions.issue();
-    this.store.createSession(issued.session);
+    await this.store.createSession(issued.session);
     return {
       token: issued.token,
       expiresAt: issued.session.expiresAt,
     };
   }
 
-  authenticate(request: Request): string {
+  async authenticate(request: Request): Promise<string> {
     const session = this.sessions.verify(bearerToken(request));
     if (
       !session ||
-      !this.store.hasSession(session.userId, this.now())
+      !(await this.store.hasSession(session.userId, this.now()))
     ) {
       throw new UserDataError(401, "UNAUTHORIZED");
     }
     return session.userId;
   }
 
-  saveRoute(
+  async saveRoute(
     userId: string,
     value: unknown,
     idempotencyKeyValue?: string,
-  ): SavedRouteSummary {
+  ): Promise<SavedRouteSummary> {
     if (!isRecord(value) || value.schemaVersion !== "1") {
       throw new UserDataError(400, "INVALID_REQUEST", "$");
     }
@@ -639,7 +639,7 @@ export class UserDataService {
       idempotencyKeyValue,
     );
     if (idempotencyKey) {
-      const existing = this.store.findSavedRouteByIdempotencyKey(
+      const existing = await this.store.findSavedRouteByIdempotencyKey(
         userId,
         idempotencyKey,
         now,
@@ -664,32 +664,37 @@ export class UserDataService {
       expiresAt: now + policy.expiresAfterSeconds * 1_000,
       hasGeometry: policy.persistence === "allowed",
     };
-    this.store.saveRoute(record);
+    await this.store.saveRoute(record);
     return record;
   }
 
-  listSavedRoutes(userId: string): readonly SavedRouteSummary[] {
+  async listSavedRoutes(
+    userId: string,
+  ): Promise<readonly SavedRouteSummary[]> {
     return this.store.listSavedRoutes(userId, this.now());
   }
 
-  deleteSavedRoute(userId: string, routeId: string): void {
-    if (!this.store.deleteSavedRoute(userId, routeId)) {
+  async deleteSavedRoute(
+    userId: string,
+    routeId: string,
+  ): Promise<void> {
+    if (!(await this.store.deleteSavedRoute(userId, routeId))) {
       throw new UserDataError(404, "SAVED_ROUTE_NOT_FOUND");
     }
   }
 
-  deleteAllUserData(userId: string): void {
-    if (!this.store.deleteUserData(userId)) {
+  async deleteAllUserData(userId: string): Promise<void> {
+    if (!(await this.store.deleteUserData(userId))) {
       throw new UserDataError(401, "UNAUTHORIZED");
     }
   }
 
-  addFieldReport(
+  async addFieldReport(
     userId: string,
     routeId: string,
     value: unknown,
-  ): FieldReport {
-    const route = this.store.getSavedRoute(
+  ): Promise<FieldReport> {
+    const route = await this.store.getSavedRoute(
       userId,
       routeId,
       this.now(),
@@ -722,11 +727,11 @@ export class UserDataService {
       createdAt: this.now(),
       expiresAt: route.expiresAt,
     };
-    this.store.addFieldReport(report);
+    await this.store.addFieldReport(report);
     return report;
   }
 
-  purgeExpired(): number {
+  async purgeExpired(): Promise<number> {
     return this.store.purgeExpired(this.now());
   }
 }

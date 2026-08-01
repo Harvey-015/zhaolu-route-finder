@@ -48,27 +48,27 @@ export type FieldReport = Readonly<{
 }>;
 
 export interface UserDataStore {
-  isHealthy(): boolean;
-  createSession(session: UserSession): void;
-  hasSession(userId: string, now: number): boolean;
-  deleteUserData(userId: string): boolean;
-  saveRoute(record: SavedRouteRecord): void;
+  isHealthy(): Promise<boolean>;
+  createSession(session: UserSession): Promise<void>;
+  hasSession(userId: string, now: number): Promise<boolean>;
+  deleteUserData(userId: string): Promise<boolean>;
+  saveRoute(record: SavedRouteRecord): Promise<void>;
   findSavedRouteByIdempotencyKey(
     userId: string,
     idempotencyKey: string,
     now: number,
-  ): SavedRouteSummary | null;
+  ): Promise<SavedRouteSummary | null>;
   listSavedRoutes(
     userId: string,
     now: number,
-  ): readonly SavedRouteSummary[];
+  ): Promise<readonly SavedRouteSummary[]>;
   getSavedRoute(
     userId: string,
     routeId: string,
     now: number,
-  ): SavedRouteRecord | null;
-  deleteSavedRoute(userId: string, routeId: string): boolean;
-  addFieldReport(report: FieldReport): void;
-  purgeExpired(now: number): number;
-  close(): void;
+  ): Promise<SavedRouteRecord | null>;
+  deleteSavedRoute(userId: string, routeId: string): Promise<boolean>;
+  addFieldReport(report: FieldReport): Promise<void>;
+  purgeExpired(now: number): Promise<number>;
+  close(): Promise<void>;
 }

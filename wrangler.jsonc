@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zhaolu-route-finder",
+  "main": "src/cloudflare/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./web-dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/_AMapService/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zhaolu-route-finder",
+      "database_id": "replace-with-d1-database-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SCENERY_CACHE",
+      "bucket_name": "zhaolu-scenery-cache"
+    }
+  ],
+  "vars": {
+    "AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN": "24",
+    "AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE": "300",
+    "AMAP_ROUTE_EXPORTS_ALLOWED": "false",
+    "ZHAOLU_OPERATOR_NAME": "CHANGE_ME",
+    "ZHAOLU_PRIVACY_CONTACT": "CHANGE_ME",
+    "ZHAOLU_LOG_RETENTION_DAYS": "30",
+    "RATE_LIMIT_PLAN_PER_MINUTE": "30",
+    "RATE_LIMIT_SESSION_PER_HOUR": "10",
+    "RATE_LIMIT_USER_DATA_PER_MINUTE": "120"
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

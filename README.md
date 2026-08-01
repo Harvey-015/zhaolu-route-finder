@@ -33,7 +33,7 @@
 - 注册式 `RouteExporter`、`NavigationLinkProvider`，以及受 Provider
   policy 控制的 GPX、GeoJSON 和高德 URI 路线交付；
 - Provider policy 控制的路线持久化与过期策略；
-- 匿名签名会话、SQLite 收藏和现场反馈；
+- 匿名签名会话、可替换的用户数据端口、SQLite/D1 收藏和现场反馈；
 - 共享搜索条件和按路线实际距离重新规划；
 - 单进程生产运行时、Docker/Compose 和 GitHub Actions；
 - 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
@@ -106,6 +106,7 @@ pnpm run test:e2e
 - [公开路线图](ROADMAP.md)
 - [变更记录](CHANGELOG.md)
 - [开放源代码发布清单](docs/OPEN_SOURCE_RELEASE.md)
+- [Cloudflare Workers + D1 + R2 演示站部署](docs/CLOUDFLARE_DEPLOYMENT.md)
 
 新增能力时保持现有解耦边界：第三方 DTO、SDK 和网络调用留在 Adapter；核心只依赖内部模型和端口；Provider、地图图层和算法 Profile 通过组合根或注册表接入。较大的扩展先使用仓库中的 Provider Issue 模板讨论坐标系、许可证、额度、缓存和降级策略。
 
@@ -115,5 +116,6 @@ pnpm run test:e2e
 
 ## 下一阶段
 
-选择生产容器平台并配置域名、TLS、Secret 与 SQLite 持久卷；发布后运行只读
-生产烟雾。需要多实例时，再把限流迁移到 Redis、数据层迁移到 PostgreSQL。
+开源演示站可使用 Cloudflare Workers + D1 + R2；独立生产运营也可继续使用
+Node 容器 + SQLite。两种运行时共享同一套 Provider、推荐算法和 API 契约，部署后
+均需完成真实域名、Secret、配额、合规与只读生产烟雾验证。

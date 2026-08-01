@@ -19,7 +19,7 @@
 
 当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、SQLite、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成统一生产运行时、容器定义、CI、Secret 校验、限流、就绪探针、受保护指标、脱敏日志、优雅关闭和只读生产烟雾。实际生产发布仍取决于外部部署平台、域名、TLS、Secret 和数据卷。
+第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、可替换用户数据端口、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成 Node 容器 + SQLite 与 Cloudflare Workers + D1 + R2 两种运行时、CI、Secret 校验、限流、就绪探针、日志和只读生产烟雾。两种运行时共享 Server API、Provider 和推荐算法；实际生产发布仍取决于外部部署平台、域名、TLS、Secret、额度和合规配置。
 
 ## 2. 架构原则
 
