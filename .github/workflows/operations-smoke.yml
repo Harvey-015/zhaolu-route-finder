@@ -1,0 +1,42 @@
+name: operations-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS origin of the deployed environment
+        required: true
+        type: string
+      maximum_backup_age_hours:
+        description: Maximum accepted backup and restore-verification age
+        required: true
+        default: "26"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operations-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run smoke:operations
+        env:
+          OPERATIONS_BASE_URL: ${{ inputs.base_url }}
+          OPERATIONS_MAX_BACKUP_AGE_HOURS: ${{ inputs.maximum_backup_age_hours }}
+          ZHAOLU_OBSERVABILITY_TOKEN: ${{ secrets.STAGING_OBSERVABILITY_TOKEN }}

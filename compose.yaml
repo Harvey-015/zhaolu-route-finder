@@ -1,5 +1,6 @@
 services:
   zhaolu:
+    image: ${ZHAOLU_IMAGE:-zhaolu-route-finder:local}
     build:
       context: .
     environment:
@@ -15,6 +16,7 @@ services:
       ZHAOLU_OPERATOR_NAME: ${ZHAOLU_OPERATOR_NAME:?required}
       ZHAOLU_PRIVACY_CONTACT: ${ZHAOLU_PRIVACY_CONTACT:?required}
       ZHAOLU_LOG_RETENTION_DAYS: ${ZHAOLU_LOG_RETENTION_DAYS:-30}
+      ZHAOLU_BACKUP_DIRECTORY: /app/backups
       RATE_LIMIT_PLAN_PER_MINUTE: ${RATE_LIMIT_PLAN_PER_MINUTE:-30}
       RATE_LIMIT_SESSION_PER_HOUR: ${RATE_LIMIT_SESSION_PER_HOUR:-10}
       RATE_LIMIT_USER_DATA_PER_MINUTE: ${RATE_LIMIT_USER_DATA_PER_MINUTE:-120}
@@ -25,6 +27,34 @@ services:
     stop_grace_period: 15s
     volumes:
       - zhaolu-data:/app/data
+      - zhaolu-backups:/app/backups:ro
+
+  backup:
+    image: ${ZHAOLU_IMAGE:-zhaolu-route-finder:local}
+    depends_on:
+      zhaolu:
+        condition: service_healthy
+    command:
+      - node
+      - --disable-warning=ExperimentalWarning
+      - dist/runtime/backupScheduler.js
+    environment:
+      ZHAOLU_DATABASE_PATH: /app/data/zhaolu.sqlite
+      ZHAOLU_BACKUP_DIRECTORY: /app/backups
+      ZHAOLU_BACKUP_INTERVAL_HOURS: ${ZHAOLU_BACKUP_INTERVAL_HOURS:-24}
+      ZHAOLU_BACKUP_RETENTION_DAYS: ${ZHAOLU_BACKUP_RETENTION_DAYS:-14}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - zhaolu-data:/app/data:ro
+      - zhaolu-backups:/app/backups
 
 volumes:
   zhaolu-data:
+  zhaolu-backups:

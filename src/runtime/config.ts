@@ -21,6 +21,7 @@ export type RuntimeConfig = Readonly<{
   sessionSecret: string;
   observabilityToken: string;
   databasePath: string;
+  backupDirectory: string;
   staticRoot: string;
   trustedProxyRanges: readonly string[];
   logLevel: RuntimeLogLevel;
@@ -244,6 +245,10 @@ export function loadRuntimeConfig(
       workingDirectory,
       environment.ZHAOLU_DATABASE_PATH?.trim() ||
         "data/zhaolu.sqlite",
+    ),
+    backupDirectory: resolve(
+      workingDirectory,
+      environment.ZHAOLU_BACKUP_DIRECTORY?.trim() || "backups",
     ),
     staticRoot: resolve(
       workingDirectory,

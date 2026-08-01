@@ -33,6 +33,7 @@
 - 共享搜索条件和按路线实际距离重新规划；
 - 单进程生产运行时、Docker/Compose 和 GitHub Actions；
 - 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
+- SQLite 在线备份、自动恢复验证和 Prometheus 告警规则；
 - 覆盖核心、Provider、API、持久化和 Web 客户端的完整自动化测试集。
 
 服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
@@ -64,7 +65,8 @@ Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
 [合规决策记录](docs/PROVIDER_COMPLIANCE.md)，生产运行见
 [部署文档](docs/DEPLOYMENT.md)，预发布实网验收见
 [预发布文档](docs/STAGING.md)，隐私、条款与数据权利见
-[隐私与条款文档](docs/PRIVACY_AND_TERMS.md)。
+[隐私与条款文档](docs/PRIVACY_AND_TERMS.md)，监控、告警和恢复见
+[运行保障文档](docs/OPERATIONS.md)。
 
 ## 开发命令
 

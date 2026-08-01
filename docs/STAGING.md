@@ -6,8 +6,9 @@
 ## 环境基线
 
 - 单实例运行；当前 SQLite 和进程内限流不支持横向多副本；
+- 启动独立备份服务，并把数据卷与备份卷分开；
 - 使用提交 SHA 标签或镜像 digest，不使用 `latest`；
-- 容器文件系统只读，仅 `/app/data` 为持久卷，`/tmp` 为临时内存盘；
+- 容器文件系统只读，仅 `/app/data` 和独立 `/app/backups` 为持久卷，`/tmp` 为临时内存盘；
 - 容器删除 Linux capabilities，并启用 `no-new-privileges`；
 - 服务端口默认只绑定 `127.0.0.1:8787`，由 HTTPS 反向代理对外提供服务；
 - 边缘必须添加 HSTS，并把实际代理源地址写入 `ZHAOLU_TRUSTED_PROXY_RANGES`；

@@ -9,6 +9,7 @@ import { SignedSessionService } from "../user-data/auth.ts";
 import { UserDataService } from "../user-data/service.ts";
 import { SqliteUserDataStore } from "../user-data/sqliteStore.ts";
 import { loadRuntimeConfig } from "./config.ts";
+import { readBackupMetadata } from "./databaseBackup.ts";
 import { createJsonLogger } from "./logger.ts";
 import { RuntimeMetrics } from "./metrics.ts";
 import { FixedWindowRateLimiter } from "./rateLimit.ts";
@@ -25,6 +26,24 @@ export async function startProductionRuntime(
     minimumLevel: config.logLevel,
   });
   const metrics = new RuntimeMetrics();
+  const refreshBackupMetrics = () => {
+    const metadata = readBackupMetadata(config.backupDirectory);
+    metrics.setBackupStatus(
+      metadata
+        ? {
+            createdAt: metadata.createdAt,
+            restoreVerifiedAt: metadata.restoreVerifiedAt,
+            sizeBytes: metadata.sizeBytes,
+          }
+        : null,
+    );
+  };
+  refreshBackupMetrics();
+  const backupMetricsRefresh = setInterval(
+    refreshBackupMetrics,
+    60_000,
+  );
+  backupMetricsRefresh.unref();
   const deliveryPolicyResolver =
     createRouteDeliveryPolicyResolver({
       amapRouteExportsAllowed:
@@ -124,6 +143,7 @@ export async function startProductionRuntime(
     logger.info("runtime_stopping", { reason });
     closing = new Promise<void>((resolveClose) => {
       clearInterval(expiryCleanup);
+      clearInterval(backupMetricsRefresh);
       const forceTimer = setTimeout(() => {
         logger.error("runtime_shutdown_timeout", {
           timeoutMs: config.shutdownTimeoutMs,
@@ -158,6 +178,7 @@ export async function startProductionRuntime(
     });
   } catch (error) {
     clearInterval(expiryCleanup);
+    clearInterval(backupMetricsRefresh);
     store.close();
     throw error;
   }

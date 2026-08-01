@@ -49,4 +49,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Compose configurations
+        env:
+          AMAP_WEB_SERVICE_KEY: ci-placeholder
+          AMAP_WEB_JS_KEY: ci-public-placeholder
+          AMAP_JS_SECURITY_CODE: ci-security-placeholder
+          ZHAOLU_IMAGE: ghcr.io/example/zhaolu-route-finder:ci
+          ZHAOLU_OPERATOR_NAME: CI Operator
+          ZHAOLU_PRIVACY_CONTACT: privacy@example.test
+          ZHAOLU_PUBLIC_ORIGIN: https://staging.example.test
+          ZHAOLU_SESSION_SECRET: ci-session-secret-at-least-thirty-two-characters
+          ZHAOLU_OBSERVABILITY_TOKEN: ci-observability-token-at-least-thirty-two-characters
+        run: |
+          docker compose config --quiet
+          docker compose -f deploy/compose.staging.yaml config --quiet
+      - name: Validate Prometheus configuration and rules
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "${{ github.workspace }}/deploy/prometheus.rules.yaml:/etc/prometheus/zhaolu.rules.yaml:ro" \
+            -v "${{ github.workspace }}/deploy/prometheus.example.yaml:/etc/prometheus/prometheus.yml:ro" \
+            -v "${{ github.workspace }}/tests/fixtures/prometheus-observability-token.txt:/run/secrets/zhaolu-observability-token:ro" \
+            prom/prometheus:v3.12.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool \
+            -v "${{ github.workspace }}/deploy/prometheus.rules.yaml:/work/zhaolu.rules.yaml:ro" \
+            prom/prometheus:v3.12.0 check rules /work/zhaolu.rules.yaml
       - run: docker build --tag zhaolu-route-finder:ci .
