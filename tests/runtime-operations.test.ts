@@ -74,6 +74,11 @@ test("loads validated production config without exposing secret values", () => {
   assert.equal(config.rateLimits.planPerMinute, 12);
   assert.equal(config.amapMaxHttpAttemptsPerPlan, 24);
   assert.equal(config.amapMaxHttpAttemptsPerMinute, 300);
+  assert.equal(config.amapRouteExportsAllowed, false);
+  assert.equal(
+    config.amapRouteExportAuthorizationReference,
+    undefined,
+  );
   assert.equal(config.amapWebMap, undefined);
   assert.deepEqual(config.trustedProxyRanges, []);
   assert.deepEqual(
@@ -137,6 +142,32 @@ test("loads validated production config without exposing secret values", () => {
         }),
       ),
     /ZHAOLU_PUBLIC_ORIGIN_INVALID/,
+  );
+  const exportEnabledConfig = loadRuntimeConfig(
+    environment({
+      AMAP_ROUTE_EXPORTS_ALLOWED: "true",
+      AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE:
+        "contract-amap-2026-08-01",
+    }),
+  );
+  assert.equal(exportEnabledConfig.amapRouteExportsAllowed, true);
+  assert.equal(
+    exportEnabledConfig.amapRouteExportAuthorizationReference,
+    "contract-amap-2026-08-01",
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ AMAP_ROUTE_EXPORTS_ALLOWED: "true" }),
+      ),
+    /AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE_REQUIRED/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ AMAP_ROUTE_EXPORTS_ALLOWED: "yes" }),
+      ),
+    /AMAP_ROUTE_EXPORTS_ALLOWED_INVALID/,
   );
 });
 

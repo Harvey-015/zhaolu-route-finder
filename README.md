@@ -26,8 +26,8 @@
 - React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
 - 高德 JS API 2.0 底图、服务端安全密钥代理和无 Key SVG 降级；
 - 桌面和移动端浏览器验收；
-- 注册式 `RouteExporter`、`NavigationLinkProvider`，以及默认
-  GPX、GeoJSON 和高德 URI 路线交付；
+- 注册式 `RouteExporter`、`NavigationLinkProvider`，以及受 Provider
+  policy 控制的 GPX、GeoJSON 和高德 URI 路线交付；
 - Provider policy 控制的路线持久化与过期策略；
 - 匿名签名会话、SQLite 收藏和现场反馈；
 - 共享搜索条件和按路线实际距离重新规划；
@@ -60,7 +60,8 @@ findScenicRoutes
 完整设计见 [架构文档](docs/ARCHITECTURE.md)。
 Web 本地运行方式见 [Web UI 文档](docs/WEB_UI.md)，Server API 见
 [接口文档](docs/SERVER_API.md)，路线交付和数据策略见
-[路线交付文档](docs/ROUTE_DELIVERY.md)，生产运行见
+[路线交付文档](docs/ROUTE_DELIVERY.md)，Provider 授权门禁见
+[合规决策记录](docs/PROVIDER_COMPLIANCE.md)，生产运行见
 [部署文档](docs/DEPLOYMENT.md)。
 
 ## 开发命令

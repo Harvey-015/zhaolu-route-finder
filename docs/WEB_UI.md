@@ -35,7 +35,7 @@ pnpm run dev:web
 - 配置 Web Key 时在高德 JS API 2.0 底图上显示路线；
 - 未配置地图或加载失败时降级为 SVG WGS-84 GeoJSON 几何预览；
 - 在路线卡片、图形和图例之间同步选择。
-- 下载 GPX 或 GeoJSON；
+- 在路线 Provider policy 允许时下载 GPX 或 GeoJSON；
 - 调起高德到路线中点，并明确说明不能交付完整自定义环线；
 - 分享可复现的搜索条件，不在 URL 中放入 Provider 路线几何；
 - 通过匿名设备会话收藏、恢复和删除路线；

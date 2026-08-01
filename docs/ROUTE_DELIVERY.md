@@ -11,7 +11,8 @@
 - 重新规划：把所选路线的实际距离写回目标距离。
 
 高德 URI 的步行和骑行模式不能携带完整自定义环线，因此页面只交接起点到路线
-中点，并明确提示完整路线使用 GPX。它不会声称高德能复现找路路线。
+中点，并明确提示高德不能复现找路路线。完整几何仍可在找路页面临时查看；只有
+Provider policy 明确允许时，页面才会提供 GPX 或 GeoJSON 下载。
 
 ## 扩展注册
 
@@ -56,9 +57,12 @@ expiresAfterSeconds
 ```
 
 生产解析器只认识显式配置的 Provider；未知来源导出、导航和持久化全部拒绝。
-当前高德 policy 允许 GeoJSON、GPX 和高德 URI，但持久化为
-`metadata-only`，24 小时后过期。Fixture policy 只用于本地测试，允许完整
-几何保存 30 天。
+当前高德 policy 默认只允许高德 URI，GPX/GeoJSON 导出为空；持久化为
+`metadata-only`，24 小时后过期。只有部署方已经核实合同或书面授权，并同时配置
+`AMAP_ROUTE_EXPORTS_ALLOWED=true` 与非空
+`AMAP_ROUTE_EXPORT_AUTHORIZATION_REFERENCE` 时，生产组合根才允许这两种导出。
+授权依据、复核和回滚要求见 `docs/PROVIDER_COMPLIANCE.md`。Fixture policy 只用于
+本地测试，允许完整几何保存 30 天。
 
 ## 会话、数据库和反馈
 
