@@ -1,0 +1,91 @@
+groups:
+  - name: zhaolu-availability
+    rules:
+      - alert: ZhaoluServiceDown
+        expr: up{job="zhaolu"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 找路服务无法被监控抓取
+          description: Prometheus 已连续 2 分钟无法抓取找路指标。
+
+      - alert: ZhaoluReadinessProbeFailing
+        expr: probe_success{job="zhaolu-ready"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 找路就绪探针失败
+          description: SQLite 或静态资源连续 2 分钟未就绪。
+
+      - alert: ZhaoluRestartLoop
+        expr: changes(zhaolu_process_start_time_seconds{job="zhaolu"}[15m]) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: 找路服务频繁重启
+          description: 15 分钟内检测到超过 2 次进程启动时间变化。
+
+  - name: zhaolu-api
+    rules:
+      - alert: ZhaoluHighServerErrorRate
+        expr: |
+          sum(rate(zhaolu_http_requests_total{job="zhaolu",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(zhaolu_http_requests_total{job="zhaolu"}[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: 找路 API 5xx 比例过高
+          description: 过去 10 分钟的 5xx 比例持续高于 5%。
+
+      - alert: ZhaoluPlanningLatencyHigh
+        expr: |
+          sum(rate(zhaolu_http_request_duration_ms_sum{job="zhaolu",path="/api/v1/routes/plan"}[10m]))
+          /
+          clamp_min(sum(rate(zhaolu_http_requests_total{job="zhaolu",path="/api/v1/routes/plan"}[10m])), 0.001)
+          > 8000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 路线规划平均响应时间过高
+          description: 路线规划平均响应时间连续 10 分钟超过 8 秒。
+
+      - alert: ZhaoluRateLimitSpike
+        expr: |
+          sum(rate(zhaolu_http_requests_total{job="zhaolu",status="429"}[5m]))
+          > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 找路限流响应异常增多
+          description: 429 响应连续 10 分钟超过每秒 0.2 次。
+
+  - name: zhaolu-data-protection
+    rules:
+      - alert: ZhaoluBackupMissingOrStale
+        expr: |
+          time() - max(zhaolu_sqlite_backup_last_success_timestamp_seconds{job="zhaolu"}) > 93600
+          or absent(zhaolu_sqlite_backup_last_success_timestamp_seconds{job="zhaolu"})
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: SQLite 备份缺失或已过期
+          description: 最近一次已验证备份超过 26 小时，或尚未产生成功记录。
+
+      - alert: ZhaoluRestoreVerificationStale
+        expr: |
+          time() - max(zhaolu_sqlite_backup_last_restore_verification_timestamp_seconds{job="zhaolu"}) > 93600
+          or absent(zhaolu_sqlite_backup_last_restore_verification_timestamp_seconds{job="zhaolu"})
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: SQLite 恢复验证缺失或已过期
+          description: 最近一次自动恢复演练超过 26 小时，或尚未产生成功记录。

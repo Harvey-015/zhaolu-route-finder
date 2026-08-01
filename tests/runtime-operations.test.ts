@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
@@ -77,6 +77,10 @@ test("loads validated production config without exposing secret values", () => {
   assert.equal(config.amapMaxHttpAttemptsPerPlan, 24);
   assert.equal(config.amapMaxHttpAttemptsPerMinute, 300);
   assert.equal(config.amapRouteExportsAllowed, false);
+  assert.equal(
+    config.backupDirectory,
+    resolve("C:\\service", "backups"),
+  );
   assert.equal(
     config.amapRouteExportAuthorizationReference,
     undefined,
@@ -367,6 +371,19 @@ test("metrics and structured logs normalize identifiers and omit queries", () =>
   });
   assert.equal(lines.length, 1);
   assert.doesNotMatch(lines[0], /authorization|secret|query/);
+
+  const metrics = new RuntimeMetrics();
+  metrics.setBackupStatus({
+    createdAt: "2026-08-01T00:00:00.000Z",
+    restoreVerifiedAt: "2026-08-01T00:00:05.000Z",
+    sizeBytes: 4_096,
+  });
+  const prometheus = metrics.toPrometheus();
+  assert.match(
+    prometheus,
+    /zhaolu_sqlite_backup_last_success_timestamp_seconds 1785542400/,
+  );
+  assert.match(prometheus, /zhaolu_sqlite_backup_size_bytes 4096/);
 });
 
 test("unified Node runtime serves secure static files and protected metrics", async () => {

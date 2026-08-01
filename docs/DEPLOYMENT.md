@@ -12,6 +12,7 @@
 - 两个彼此独立、至少 32 字符的随机 Secret：
   `ZHAOLU_SESSION_SECRET` 和 `ZHAOLU_OBSERVABILITY_TOKEN`；
 - SQLite 数据卷的持久目录；
+- 独立备份卷、异地对象存储和真实告警通知通道；
 - 外部 HTTPS 反向代理或负载均衡器；
 - 实际运营主体、可公开的隐私联系方式，以及外部日志平台保存天数。
 
@@ -121,7 +122,8 @@ Redis，把 `UserDataStore` 替换为 PostgreSQL/PostGIS；不要直接运行多
 
 ## 数据、备份和过期
 
-启动时和每小时清理过期会话、收藏和反馈。数据卷需要平台快照或停机文件备份。
+启动时和每小时清理过期会话、收藏和反馈。Compose 的独立 `backup` 服务默认立即执行一次
+已验证在线备份，之后每 24 小时执行一次；API 只读挂载备份卷并把最近成功状态暴露给监控。
 SQLite 使用 `PRAGMA user_version` 和顺序事务 migration；旧的未版本化数据库会在
 首次启动时升级为 schema v1，版本高于当前程序支持范围时会拒绝启动。每次发布前
 仍必须先做数据卷快照；migration 负责原子升级和失败回滚，不代替可恢复备份。
@@ -130,6 +132,9 @@ SQLite 使用 `PRAGMA user_version` 和顺序事务 migration；旧的未版本�
 1. SQLite 文件能打开且 `/api/v1/ready` 返回 `ready`；
 2. 匿名收藏仍按 user id 隔离；
 3. 高德路线仍只有 metadata，不出现长期 geometry。
+
+备份实现、Prometheus/Alertmanager 接入、恢复演练和实际恢复步骤见
+`docs/OPERATIONS.md`。同节点备份卷不能替代加密异地副本。
 
 ## 生产烟雾
 

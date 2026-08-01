@@ -152,7 +152,8 @@ API 不返回上游响应正文、内部异常消息或密钥。请求体上限�
 默认最长 45 秒；HTTP 客户端取消会传递到核心及 Provider。
 
 生产运行时还提供需要独立 Bearer token 的 `/internal/metrics`。该接口不属于
-公共 v1 业务契约，细节见 `docs/DEPLOYMENT.md`。
+公共 v1 业务契约。指标包括归一化 HTTP 请求计数与累计耗时、进程启动时间，以及最近一次
+已验证 SQLite 备份和自动恢复演练时间；细节见 `docs/OPERATIONS.md`。
 
 ## 本地离线冒烟
 
