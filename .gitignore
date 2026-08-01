@@ -9,6 +9,7 @@ data/
 .env
 .env.*
 !.env.example
+!.env.staging.example
 
 .DS_Store
 Thumbs.db
