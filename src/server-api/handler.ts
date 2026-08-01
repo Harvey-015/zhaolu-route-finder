@@ -64,6 +64,11 @@ export type CreateServerApiOptions = Readonly<{
   readinessCheck?: () => Promise<
     Readonly<Record<string, "ok" | "error">>
   >;
+  webMapConfig?: Readonly<{
+    providerId: "amap-jsapi";
+    key: string;
+    serviceHost: "/_AMapService";
+  }>;
 }>;
 
 class ApiTransportError extends Error {
@@ -238,6 +243,7 @@ function rateLimitScope(
 function capabilitiesPayload(
   userDataAvailable: boolean,
   deliveryCapabilities: RouteDeliveryCapabilities,
+  webMapAvailable: boolean,
 ) {
   return {
     schemaVersion: SERVER_API_SCHEMA_VERSION,
@@ -260,6 +266,11 @@ function capabilitiesPayload(
       currentlyUnavailable: ["roadComfort"],
     },
     openApiDocument: "/api/v1/openapi.json",
+    webMap: {
+      available: webMapAvailable,
+      providerId: webMapAvailable ? "amap-jsapi" : null,
+      configDocument: "/api/v1/map-config",
+    },
     routeDelivery: {
       exportFormats: deliveryCapabilities.exportFormats,
       navigationTargets: deliveryCapabilities.navigationTargets,
@@ -421,7 +432,30 @@ export function createServerApi(
           options.userData !== undefined,
           options.deliveryCapabilities ??
             DEFAULT_ROUTE_DELIVERY_CAPABILITIES,
+          options.webMapConfig !== undefined,
         ),
+        200,
+        requestId,
+      );
+    }
+
+    if (pathname === "/api/v1/map-config") {
+      if (request.method !== "GET") {
+        return errorResponse(
+          requestId,
+          405,
+          "METHOD_NOT_ALLOWED",
+          false,
+          undefined,
+          { allow: "GET" },
+        );
+      }
+      return jsonResponse(
+        {
+          schemaVersion: SERVER_API_SCHEMA_VERSION,
+          enabled: options.webMapConfig !== undefined,
+          ...(options.webMapConfig ?? {}),
+        },
         200,
         requestId,
       );

@@ -9,6 +9,10 @@ import {
   AmapWebServiceClient,
   type AmapFetch,
 } from "../src/adapters/amap/httpClient.ts";
+import {
+  buildAmapJsApiUpstreamUrl,
+  proxyAmapJsApiRequest,
+} from "../src/adapters/amap/jsApiProxy.ts";
 import { mapAmapRouteLegResponse } from "../src/adapters/amap/mappers.ts";
 import { AmapPlaceProvider } from "../src/adapters/amap/placeProvider.ts";
 import { AmapRouteProvider } from "../src/adapters/amap/routeProvider.ts";
@@ -78,6 +82,49 @@ test("converts WGS-84 and GCJ-02 only at the adapter boundary", () => {
   const unchanged = wgs84ToGcj02(outsideChina);
   assert.equal(unchanged.longitude, outsideChina.longitude);
   assert.equal(unchanged.latitude, outsideChina.latitude);
+});
+
+test("keeps the JS API security code in a same-origin allowlisted proxy", async () => {
+  const built = buildAmapJsApiUpstreamUrl(
+    "https://routes.example.com/_AMapService/v3/geocode/geo?key=public-key&jscode=attacker&address=%E8%A5%BF%E6%B9%96",
+    "server-security-code",
+  );
+  assert.equal(built?.origin, "https://restapi.amap.com");
+  assert.equal(built?.searchParams.get("jscode"), "server-security-code");
+  assert.equal(built?.searchParams.getAll("jscode").length, 1);
+
+  let requestedSecurityCode: string | null = null;
+  const response = await proxyAmapJsApiRequest(
+    new Request(
+      "https://routes.example.com/_AMapService/v3/geocode/geo?key=public-key",
+      { headers: { origin: "https://routes.example.com" } },
+    ),
+    {
+      securityCode: "server-security-code",
+      publicOrigin: "https://routes.example.com",
+      fetcher: async (url) => {
+        requestedSecurityCode = url.searchParams.get("jscode");
+        return Response.json({ status: "1" });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(requestedSecurityCode, "server-security-code");
+
+  const forbidden = await proxyAmapJsApiRequest(
+    new Request(
+      "https://routes.example.com/_AMapService/v3/geocode/geo?key=public-key",
+      { headers: { origin: "https://attacker.example" } },
+    ),
+    {
+      securityCode: "server-security-code",
+      publicOrigin: "https://routes.example.com",
+      fetcher: async () => {
+        throw new Error("must not call upstream");
+      },
+    },
+  );
+  assert.equal(forbidden.status, 403);
 });
 
 test("maps an AMap geocode fixture to a provider-neutral place", async () => {

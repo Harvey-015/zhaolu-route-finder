@@ -9,6 +9,7 @@ import {
 } from "node:http";
 import { BlockList, isIP } from "node:net";
 import { extname, resolve, sep } from "node:path";
+import { proxyAmapJsApiRequest } from "../adapters/amap/jsApiProxy.ts";
 import type { RuntimeLogger } from "../runtime/logger.ts";
 import { safeRequestLogFields } from "../runtime/logger.ts";
 import type { RuntimeMetrics } from "../runtime/metrics.ts";
@@ -28,6 +29,14 @@ export type NodeApiServerOptions = Readonly<{
   logger?: RuntimeLogger;
   observabilityToken?: string;
   trustedProxyRanges?: readonly string[];
+  amapJsApiProxy?: Readonly<{
+    securityCode: string;
+    publicOrigin: string;
+    fetcher?: (
+      input: URL,
+      init: RequestInit,
+    ) => Promise<Response>;
+  }>;
 }>;
 
 type TrustedProxyMatcher = Readonly<{
@@ -245,13 +254,13 @@ function staticHeaders(pathname: string): Headers {
       ? "public, max-age=31536000, immutable"
       : "no-cache",
     "content-security-policy":
-      "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+      "default-src 'self'; base-uri 'none'; connect-src 'self' https://*.amap.com https://*.autonavi.com; font-src 'self' data: https://*.amap.com https://*.autonavi.com; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; object-src 'none'; script-src 'self' https://webapi.amap.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
     "content-type":
       STATIC_CONTENT_TYPES[extname(pathname).toLowerCase()] ??
       "application/octet-stream",
     "permissions-policy":
       "camera=(), geolocation=(), microphone=()",
-    "referrer-policy": "no-referrer",
+    "referrer-policy": "strict-origin-when-cross-origin",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
   });
@@ -363,7 +372,36 @@ export function createNodeApiServer(
     let requestId: string | null = null;
     try {
       let webResponse: Response | null = null;
-      if (pathname === "/internal/metrics") {
+      if (pathname.startsWith("/_AMapService/")) {
+        if (!options.amapJsApiProxy) {
+          webResponse = Response.json(
+            {
+              schemaVersion: "1",
+              error: {
+                code: "AMAP_WEB_MAP_UNAVAILABLE",
+                retryable: false,
+              },
+            },
+            {
+              status: 503,
+              headers: {
+                "cache-control": "no-store",
+                "x-content-type-options": "nosniff",
+              },
+            },
+          );
+        } else {
+          const webRequest = await toWebRequest(
+            request,
+            response,
+            trustedProxies,
+          );
+          webResponse = await proxyAmapJsApiRequest(
+            webRequest,
+            options.amapJsApiProxy,
+          );
+        }
+      } else if (pathname === "/internal/metrics") {
         if (
           !validObservabilityToken(
             request.headers.authorization,

@@ -164,6 +164,11 @@ test("exposes stable health and capability discovery endpoints", async () => {
       return coreResult(request);
     },
     requestIdFactory: () => "generated-health",
+    webMapConfig: {
+      providerId: "amap-jsapi",
+      key: "public-web-key",
+      serviceHost: "/_AMapService",
+    },
   });
 
   const health = await handler(
@@ -178,11 +183,16 @@ test("exposes stable health and capability discovery endpoints", async () => {
   const openApi = await handler(
     new Request("http://localhost/api/v1/openapi.json"),
   );
+  const mapConfig = await handler(
+    new Request("http://localhost/api/v1/map-config"),
+  );
   const healthBody = (await health.json()) as Record<string, unknown>;
   const readinessBody =
     (await readiness.json()) as Record<string, unknown>;
   const capabilitiesBody =
     (await capabilities.json()) as Record<string, unknown>;
+  const mapConfigBody =
+    (await mapConfig.json()) as Record<string, unknown>;
   const openApiBody = (await openApi.json()) as {
     openapi: string;
     paths: Record<
@@ -201,6 +211,11 @@ test("exposes stable health and capability discovery endpoints", async () => {
     "WGS84",
   );
   assert.equal(capabilitiesBody.geometryFormat, "GeoJSON");
+  assert.deepEqual(capabilitiesBody.webMap, {
+    available: true,
+    providerId: "amap-jsapi",
+    configDocument: "/api/v1/map-config",
+  });
   assert.equal(
     capabilitiesBody.openApiDocument,
     "/api/v1/openapi.json",
@@ -208,6 +223,7 @@ test("exposes stable health and capability discovery endpoints", async () => {
   assert.equal(openApi.status, 200);
   assert.equal(openApiBody.openapi, "3.1.0");
   assert.ok("/api/v1/ready" in openApiBody.paths);
+  assert.ok("/api/v1/map-config" in openApiBody.paths);
   assert.ok("/api/v1/routes/plan" in openApiBody.paths);
   assert.ok("/api/v1/session" in openApiBody.paths);
   assert.ok("/api/v1/saved-routes" in openApiBody.paths);
@@ -233,6 +249,14 @@ test("exposes stable health and capability discovery endpoints", async () => {
     ),
   );
   assert.equal(planCallCount, 0);
+  assert.equal(mapConfig.status, 200);
+  assert.deepEqual(mapConfigBody, {
+    schemaVersion: "1",
+    enabled: true,
+    providerId: "amap-jsapi",
+    key: "public-web-key",
+    serviceHost: "/_AMapService",
+  });
   assert.equal(health.headers.get("cache-control"), "no-store");
   assert.equal(
     health.headers.get("x-content-type-options"),

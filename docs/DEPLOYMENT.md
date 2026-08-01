@@ -7,6 +7,8 @@
 
 - Node 24（容器基线）；
 - 高德 Web Service Key；
+- 高德 Web JS Key 与配套安全密钥；
+- 最终 HTTPS 站点来源，例如 `https://routes.example.com`；
 - 两个彼此独立、至少 32 字符的随机 Secret：
   `ZHAOLU_SESSION_SECRET` 和 `ZHAOLU_OBSERVABILITY_TOKEN`；
 - SQLite 数据卷的持久目录；
@@ -21,6 +23,9 @@ Git。生产配置校验会在监听端口前失败，错误只包含变量名�
 pnpm install --frozen-lockfile
 pnpm run build
 $env:AMAP_WEB_SERVICE_KEY = "<server-key>"
+$env:AMAP_WEB_JS_KEY = "<browser-web-key>"
+$env:AMAP_JS_SECURITY_CODE = "<server-only-js-security-code>"
+$env:ZHAOLU_PUBLIC_ORIGIN = "https://routes.example.com"
 $env:ZHAOLU_SESSION_SECRET = "<random-secret-at-least-32-characters>"
 $env:ZHAOLU_OBSERVABILITY_TOKEN = "<different-random-secret-at-least-32-characters>"
 pnpm run start:production
@@ -28,6 +33,11 @@ pnpm run start:production
 
 默认监听 `0.0.0.0:8787`，静态文件来自 `web-dist`，数据库为
 `data/zhaolu.sqlite`。
+
+高德 Web JS Key 会通过 `/api/v1/map-config` 下发给浏览器，应在高德控制台绑定
+生产域名。`AMAP_JS_SECURITY_CODE` 不下发；Node 运行时只允许来自
+`ZHAOLU_PUBLIC_ORIGIN` 的浏览器请求访问 `/_AMapService`，并且只转发白名单内的
+高德路径。开发时来源可以是 `http://127.0.0.1:5173`，非本机来源必须使用 HTTPS。
 
 生产环境位于反向代理或负载均衡器后时，必须把代理实际使用的源地址或 CIDR 写入
 `ZHAOLU_TRUSTED_PROXY_RANGES`，例如 `10.20.0.0/16,fd00:20::/64`。默认值为空，

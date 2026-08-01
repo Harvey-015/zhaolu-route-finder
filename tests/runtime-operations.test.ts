@@ -74,6 +74,7 @@ test("loads validated production config without exposing secret values", () => {
   assert.equal(config.rateLimits.planPerMinute, 12);
   assert.equal(config.amapMaxHttpAttemptsPerPlan, 24);
   assert.equal(config.amapMaxHttpAttemptsPerMinute, 300);
+  assert.equal(config.amapWebMap, undefined);
   assert.deepEqual(config.trustedProxyRanges, []);
   assert.deepEqual(
     loadRuntimeConfig(
@@ -104,6 +105,38 @@ test("loads validated production config without exposing secret values", () => {
         }),
       ),
     /ZHAOLU_TRUSTED_PROXY_RANGES_INVALID/,
+  );
+  assert.deepEqual(
+    loadRuntimeConfig(
+      environment({
+        AMAP_WEB_JS_KEY: "public-web-key",
+        AMAP_JS_SECURITY_CODE: "server-only-code",
+        ZHAOLU_PUBLIC_ORIGIN: "https://routes.example.com",
+      }),
+    ).amapWebMap,
+    {
+      webJsKey: "public-web-key",
+      securityCode: "server-only-code",
+      publicOrigin: "https://routes.example.com",
+    },
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({ AMAP_WEB_JS_KEY: "incomplete" }),
+      ),
+    /AMAP_JS_SECURITY_CODE_REQUIRED/,
+  );
+  assert.throws(
+    () =>
+      loadRuntimeConfig(
+        environment({
+          AMAP_WEB_JS_KEY: "public-web-key",
+          AMAP_JS_SECURITY_CODE: "server-only-code",
+          ZHAOLU_PUBLIC_ORIGIN: "http://routes.example.com",
+        }),
+      ),
+    /ZHAOLU_PUBLIC_ORIGIN_INVALID/,
   );
 });
 
@@ -243,6 +276,10 @@ test("metrics and structured logs normalize identifiers and omit queries", () =>
     ),
     "/api/v1/saved-routes/:routeId/feedback",
   );
+  assert.equal(
+    normalizedRoutePath("/_AMapService/v3/geocode/geo"),
+    "/_AMapService/:path",
+  );
   assert.deepEqual(
     safeRequestLogFields({
       method: "GET",
@@ -318,6 +355,10 @@ test("unified Node runtime serves secure static files and protected metrics", as
     );
     const spaRoute = await fetch(`${origin}/routes/example`);
     const ready = await fetch(`${origin}/api/v1/ready`);
+    const mapProxyUnavailable = await fetch(
+      `${origin}/_AMapService/v3/geocode/geo?key=public`,
+      { headers: { origin } },
+    );
     const unauthorized = await fetch(`${origin}/internal/metrics`);
     const authorized = await fetch(`${origin}/internal/metrics`, {
       headers: {
@@ -336,6 +377,10 @@ test("unified Node runtime serves secure static files and protected metrics", as
       home.headers.get("content-security-policy") ?? "",
       /default-src 'self'/,
     );
+    assert.match(
+      home.headers.get("content-security-policy") ?? "",
+      /https:\/\/webapi\.amap\.com/,
+    );
     assert.equal(
       asset.headers.get("cache-control"),
       "public, max-age=31536000, immutable",
@@ -348,6 +393,7 @@ test("unified Node runtime serves secure static files and protected metrics", as
     assert.equal(spaRoute.status, 200);
     assert.match(await spaRoute.text(), /<title>找路<\/title>/);
     assert.equal(ready.status, 200);
+    assert.equal(mapProxyUnavailable.status, 503);
     assert.equal(unauthorized.status, 401);
     assert.equal(authorized.status, 200);
     assert.match(metricBody, /zhaolu_http_requests_total/);

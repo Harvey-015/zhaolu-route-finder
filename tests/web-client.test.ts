@@ -20,6 +20,7 @@ import {
   BasemapRendererRegistry,
   defineBasemapRenderer,
 } from "../web/src/basemap.ts";
+import { loadWebMapConfig } from "../web/src/mapConfig.ts";
 import {
   createAnonymousSession,
   createAnonymousSessionCoordinator,
@@ -268,6 +269,36 @@ test("basemap renderers can be registered and selected by id", () => {
     () => new BasemapRendererRegistry([renderer, renderer]),
     /BASEMAP_RENDERER_DUPLICATE/,
   );
+});
+
+test("web map config exposes only the public key and fails closed", async () => {
+  const enabled = await loadWebMapConfig(async () =>
+    Response.json({
+      schemaVersion: "1",
+      enabled: true,
+      providerId: "amap-jsapi",
+      key: "public-web-key",
+      serviceHost: "/_AMapService",
+      securityCode: "must-not-be-retained",
+    }),
+  );
+  const malformed = await loadWebMapConfig(async () =>
+    Response.json({
+      schemaVersion: "1",
+      enabled: true,
+      providerId: "amap-jsapi",
+      key: "",
+      serviceHost: "https://attacker.example",
+    }),
+  );
+
+  assert.deepEqual(enabled, {
+    enabled: true,
+    providerId: "amap-jsapi",
+    key: "public-web-key",
+    serviceHost: "/_AMapService",
+  });
+  assert.deepEqual(malformed, { enabled: false });
 });
 
 test("anonymous session and save clients send bearer-scoped contracts", async () => {
