@@ -16,6 +16,17 @@ pnpm run dev:web
 `/api` 请求代理到该端口。默认地点“杭州西湖”是夹具数据，不会访问高德或
 WorldCover 网络服务。
 
+只验证真实卫星/标准底图、仍使用离线路线夹具时，可在启动夹具 API 前配置：
+
+```powershell
+$env:AMAP_WEB_JS_KEY = "<Web 端（JS API）Key>"
+$env:AMAP_JS_SECURITY_CODE = "<对应安全密钥>"
+pnpm run dev:api:fixture
+```
+
+两项必须成对提供。夹具 API 会公开 Web Key，并通过同源 `/_AMapService` 代理使用
+安全密钥；它不会访问真实地点或路线服务，因此不需要 `AMAP_WEB_SERVICE_KEY`。
+
 使用真实 Provider 时，按 `docs/SERVER_API.md` 配置服务端环境变量并运行：
 
 ```powershell

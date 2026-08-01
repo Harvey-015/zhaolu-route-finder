@@ -15,19 +15,43 @@ const userData = new UserDataService({
   ),
   policyResolver: resolveFixtureRouteDeliveryPolicy,
 });
-const server = createNodeApiServer(
-  createServerApi({
-    planRoutes: planner.planRoutes,
-    requestIdFactory: () => crypto.randomUUID(),
-    deliveryPolicyResolver: resolveFixtureRouteDeliveryPolicy,
-    legalConfig: {
-      operatorName: "找路测试运营者",
-      privacyContact: "privacy@example.test",
-      logRetentionDays: 30,
-    },
-    userData,
-  }),
-);
+const webJsKey = process.env.AMAP_WEB_JS_KEY?.trim() ?? "";
+const securityCode =
+  process.env.AMAP_JS_SECURITY_CODE?.trim() ?? "";
+if (Boolean(webJsKey) !== Boolean(securityCode)) {
+  throw new RangeError("FIXTURE_AMAP_WEB_MAP_CONFIG_INCOMPLETE");
+}
+const webMapEnabled = Boolean(webJsKey && securityCode);
+const handler = createServerApi({
+  planRoutes: planner.planRoutes,
+  requestIdFactory: () => crypto.randomUUID(),
+  deliveryPolicyResolver: resolveFixtureRouteDeliveryPolicy,
+  legalConfig: {
+    operatorName: "找路测试运营者",
+    privacyContact: "privacy@example.test",
+    logRetentionDays: 30,
+  },
+  userData,
+  ...(webMapEnabled
+    ? {
+        webMapConfig: {
+          providerId: "amap-jsapi" as const,
+          key: webJsKey,
+          serviceHost: "/_AMapService" as const,
+        },
+      }
+    : {}),
+});
+const server = createNodeApiServer(handler, {
+  ...(webMapEnabled
+    ? {
+        amapJsApiProxy: {
+          securityCode,
+          publicOrigin: "http://127.0.0.1:5173",
+        },
+      }
+    : {}),
+});
 
 server.listen(8787, "127.0.0.1", () => {
   process.stdout.write(
