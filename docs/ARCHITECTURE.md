@@ -52,6 +52,7 @@
 ```text
 地图服务能力
 ├─ BasemapRenderer
+├─ MapLayerProvider（底图 / 可见参考层）
 ├─ RoutingProvider
 ├─ GeocodingProvider
 ├─ PlaceSearchProvider
@@ -248,13 +249,13 @@ type BasemapRenderer = {
 };
 ```
 
-Web 组合根把 Renderer 注入 `App`。当前默认实现是
-`svgBasemapRenderer`；新增实现使用 `defineBasemapRenderer` 声明，并可通过
-`BasemapRendererRegistry` 按 ID 选择：
+Web 组合根把 Renderer 注入 `App`。当前默认实现是 `amapBasemapRenderer`，未配置
+高德 Web Key 或加载失败时降级为 SVG 几何预览。新增实现使用
+`defineBasemapRenderer` 声明，并可通过 `BasemapRendererRegistry` 按 ID 选择：
 
 ```tsx
 const amapBasemapRenderer = defineBasemapRenderer({
-  id: "amap",
+  id: "amap-jsapi",
   displayName: "高德地图",
   component: AmapRouteMap,
 });
@@ -271,6 +272,30 @@ root.render(<App basemapRenderer={amapBasemapRenderer} />);
 地图组件只接收标准 API 路线和选择回调。SDK 生命周期、Web Key、覆盖物和坐标
 显示转换属于具体 Renderer；路线计算、服务端 Secret 和 Provider 调用不能放进
 地图组件。
+
+完整 Renderer 与可见图层是两个层级。只替换卫星源或新增专题参考数据时，注册
+`MapLayerProvider`，不需要重写路线覆盖物和选择交互：
+
+```ts
+type MapLayerProvider<Context, Layer> = {
+  id: string;
+  displayName: string;
+  kind: "base" | "reference";
+  attribution: string;
+  coordinateSystem: "WGS84" | "GCJ02" | "provider-native";
+  defaultEnabled?: boolean;
+  createLayers(context: Context): readonly Layer[];
+};
+```
+
+`MapLayerProviderRegistry` 负责 ID 唯一性、能力分类和选择。当前默认注册：
+
+- `amap-satellite`：高德卫星影像与路网，默认底图；
+- `amap-standard`：高德标准图，可切换底图。
+
+以后可以注册新的卫星、地形、土地覆盖、遥感指标或热力参考层。每个注册项必须声明
+归属信息与坐标系；若供应商政策不允许与现有路线来源叠加，应注册新的 Renderer /
+Provider profile，而不是只替换 Tile URL。
 
 ### 5.4 地点与地理编码
 
@@ -402,7 +427,29 @@ type RouteSelectionStrategy = (
 - 与已选路线的最大重合率 × 惩罚系数
 ```
 
-### 5.8 输出与手机交接
+### 5.8 推荐算法 Profile
+
+候选生成、评分和最终筛选仍是三个独立端口；面向产品组合时使用一个版本化 Profile
+把兼容的三者绑定在一起：
+
+```ts
+const algorithm = defineRecommendationAlgorithm({
+  id: "scenic-route",
+  version: "1",
+  displayName: "风景环线推荐 v1",
+  candidateGenerationStrategy,
+  scoringPolicy,
+  routeSelectionStrategy,
+});
+
+const registry = new RecommendationAlgorithmRegistry([algorithm]);
+```
+
+新增跑步、骑行、低坡度、夜跑或机器学习推荐算法时，可以新增并注册 Profile，再在
+组合根注入 `createRoutePlanner`；不修改 `findScenicRoutes`、Server API 或页面。
+Profile ID 与版本会形成稳定选择键，评分结果仍单独保留评分 policy 版本以便解释。
+
+### 5.9 输出与手机交接
 
 ```ts
 interface RouteExporter {
@@ -443,11 +490,13 @@ Provider Registry 在应用启动时组装能力：
 
 ```ts
 type ProviderProfile = {
-  basemap: BasemapRenderer;
+  mapRenderer: BasemapRenderer;
+  mapLayers: MapLayerProviderRegistry;
   routing: RoutingProvider;
   geocoding: GeocodingProvider;
   places: PlaceSearchProvider;
   navigation: NavigationLinkProvider;
+  recommendationAlgorithm: RecommendationAlgorithmProfile;
   policy: ProviderPolicy;
 };
 ```
@@ -455,11 +504,14 @@ type ProviderProfile = {
 初始配置：
 
 ```text
-china
-├─ basemap: AMap
+china-default
+├─ mapRenderer: AMap JS API 2.0
+├─ mapLayers: AMap Satellite + RoadNet（默认）/ AMap Standard（可切换）
 ├─ routing: AMap
-├─ geocoding: AMap
-├─ places: AMap
+├─ geocoding: AMap（POI 未命中时兜底）
+├─ places: AMap POI text search
+├─ scenery: ESA WorldCover
+├─ recommendationAlgorithm: scenic-route@1
 └─ navigation: AMap
 ```
 
@@ -467,10 +519,12 @@ china
 
 ```text
 global
-├─ basemap: Google
+├─ mapRenderer: Google / MapLibre
+├─ mapLayers: 对应区域与授权的底图、参考层
 ├─ routing: Google
 ├─ geocoding: Google
 ├─ places: Google
+├─ recommendationAlgorithm: 可独立选择
 └─ navigation: Google
 ```
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  defineRecommendationAlgorithm,
+  RecommendationAlgorithmRegistry,
+} from "../src/route-recommendation/algorithms.ts";
+import {
   destinationPoint,
   distanceMeters,
   wgs84Point,
@@ -101,6 +105,29 @@ function constantScoringPolicy(): RouteScoringPolicy {
     }),
   };
 }
+
+test("recommendation algorithms are registered as versioned profiles", () => {
+  const profile = defineRecommendationAlgorithm({
+    id: "example-scenic",
+    version: "2",
+    displayName: "Example scenic v2",
+    candidateGenerationStrategy: generateDirectionalCandidates,
+    scoringPolicy: constantScoringPolicy(),
+    routeSelectionStrategy: selectDiverseRoutes,
+  });
+  const registry = new RecommendationAlgorithmRegistry([profile]);
+
+  assert.deepEqual(registry.require("example-scenic", "2"), profile);
+  assert.deepEqual(registry.ids(), ["example-scenic@2"]);
+  assert.throws(
+    () => registry.require("missing", "1"),
+    /RECOMMENDATION_ALGORITHM_NOT_REGISTERED/,
+  );
+  assert.throws(
+    () => new RecommendationAlgorithmRegistry([profile, profile]),
+    /RECOMMENDATION_ALGORITHM_DUPLICATE/,
+  );
+});
 
 function equallyScoredRoute(id: string, longitudeOffset: number): RecommendedRoute {
   const geometry = [

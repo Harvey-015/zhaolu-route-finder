@@ -11,6 +11,8 @@ import type {
   AmapApiEnvelopeDto,
   AmapGeocodeDto,
   AmapGeocodeResponseDto,
+  AmapPlaceTextResponseDto,
+  AmapPoiDto,
   AmapRouteCostDto,
   AmapRoutePathDto,
   AmapRouteResponseDto,
@@ -109,6 +111,36 @@ export function parseAmapGeocodeResponse(
     count: requiredString(envelope.count, providerId),
     geocodes: requiredArray(envelope.geocodes, providerId).map(
       (geocode) => parseGeocode(geocode, providerId),
+    ),
+  };
+}
+
+function parsePoi(
+  value: unknown,
+  providerId: string,
+): AmapPoiDto {
+  const record = asRecord(value, providerId);
+  return {
+    id: optionalString(record.id),
+    name: requiredString(record.name, providerId),
+    address: optionalString(record.address),
+    location: requiredString(record.location, providerId),
+    adcode: optionalString(record.adcode),
+  };
+}
+
+export function parseAmapPlaceTextResponse(
+  value: unknown,
+  providerId: string,
+): AmapPlaceTextResponseDto {
+  const envelope = parseEnvelope(value, providerId);
+  return {
+    status: envelope.status,
+    info: envelope.info,
+    infocode: envelope.infocode,
+    count: requiredString(envelope.count, providerId),
+    pois: requiredArray(envelope.pois, providerId).map((poi) =>
+      parsePoi(poi, providerId),
     ),
   };
 }
@@ -274,6 +306,48 @@ export function mapAmapGeocodeResponse(
     source: {
       providerId: input.providerId,
       externalId: externalId || geocode.location,
+    },
+  };
+}
+
+export function mapAmapPlaceTextResponse(
+  value: unknown,
+  input: Readonly<{
+    providerId: string;
+  }>,
+): ResolvedPlace | null {
+  const response = parseAmapPlaceTextResponse(
+    value,
+    input.providerId,
+  );
+  const poi = response.pois[0];
+  if (!poi) return null;
+
+  const parts = poi.location.split(",");
+  if (parts.length !== 2) throw invalidAmapResponse(input.providerId);
+  const longitude = Number(parts[0]);
+  const latitude = Number(parts[1]);
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    throw invalidAmapResponse(input.providerId);
+  }
+
+  let point: Wgs84Point;
+  try {
+    point = gcj02ToWgs84(gcj02Point(longitude, latitude));
+  } catch {
+    throw invalidAmapResponse(input.providerId);
+  }
+  const externalId = poi.id ?? [poi.adcode, poi.location]
+    .filter(Boolean)
+    .join(":");
+
+  return {
+    id: `${input.providerId}:${externalId || poi.location}`,
+    name: poi.name,
+    point,
+    source: {
+      providerId: input.providerId,
+      externalId: externalId || poi.location,
     },
   };
 }

@@ -12,7 +12,7 @@
 - WGS-84 与 GCJ-02 类型边界；
 - `findScenicRoutes` 应用用例；
 - 可替换的地点、路线、环境和评分端口；
-- 可替换的候选生成与路线选择纯策略；
+- 可替换的候选生成、评分与路线选择纯策略，以及版本化算法 Profile 注册表；
 - Fake Provider 和完全离线的核心测试；
 - 调用预算、并发、取消、降级和稳定错误契约。
 - 高德地点解析与步行、骑行路线 Adapter；
@@ -23,8 +23,9 @@
 - 高德离线契约测试和受控在线冒烟；
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
-- React Web UI、路线条件、结果比较和可注入 `BasemapRenderer`；
-- 高德 JS API 2.0 底图、服务端安全密钥代理和无 Key SVG 降级；
+- React Web UI、当前位置、最多三个必经点、路线条件和结果比较；
+- 可注入 `BasemapRenderer` 与独立的 `MapLayerProvider` 注册表；
+- 高德 JS API 2.0 默认卫星图 + 路网、标准图切换、服务端安全密钥代理和无 Key SVG 降级；
 - 桌面和移动端浏览器验收；
 - 注册式 `RouteExporter`、`NavigationLinkProvider`，以及受 Provider
   policy 控制的 GPX、GeoJSON 和高德 URI 路线交付；
@@ -53,6 +54,11 @@ findScenicRoutes
   ├─ CandidateGenerationStrategy
   └─ RouteSelectionStrategy
 ```
+
+默认产品组合为：高德 JS API 地图渲染、高德卫星/标准底图、高德 POI 与路线规划、
+ESA WorldCover 环境分析、`scenic-route@1` 推荐算法，以及高德导航交接。地图渲染器、
+可见底图/参考图层、地点与道路 Provider、环境数据 Provider、推荐算法 Profile 和路线
+交付 Provider 均在组合根注册，可以分别替换，不要求修改路线核心或页面条件分支。
 
 核心代码只依赖内部 TypeScript 模型，不依赖 React、Next.js、Cloudflare、数据库或第三方地图 SDK。
 

@@ -33,7 +33,7 @@ test("skips the AMap smoke safely when the server key is missing", async () => {
 
 test("limits the AMap smoke to one place and two route requests", async () => {
   const payloads = [
-    await fixture("geocode-success.json"),
+    await fixture("place-text-success.json"),
     await fixture("walking-leg-1.json"),
     await fixture("walking-leg-1.json"),
   ];

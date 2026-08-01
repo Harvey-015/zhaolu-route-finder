@@ -7,7 +7,10 @@ import type {
   ProviderCallContext,
 } from "../../route-recommendation/ports.ts";
 import type { AmapWebServiceClient } from "./httpClient.ts";
-import { mapAmapGeocodeResponse } from "./mappers.ts";
+import {
+  mapAmapGeocodeResponse,
+  mapAmapPlaceTextResponse,
+} from "./mappers.ts";
 
 export type AmapPlaceProviderOptions = Readonly<{
   id?: string;
@@ -61,7 +64,26 @@ export class AmapPlaceProvider implements PlaceProvider {
         retryable: false,
       });
     }
-    const response = await this.client.getJson(
+    const placeResponse = await this.client.getJson(
+      this.id,
+      "/v3/place/text",
+      {
+        keywords: query,
+        city: this.city,
+        citylimit: "false",
+        offset: "10",
+        page: "1",
+        extensions: "base",
+        output: "JSON",
+      },
+      context,
+    );
+    const place = mapAmapPlaceTextResponse(placeResponse, {
+      providerId: this.id,
+    });
+    if (place) return place;
+
+    const geocodeResponse = await this.client.getJson(
       this.id,
       "/v3/geocode/geo",
       {
@@ -71,7 +93,7 @@ export class AmapPlaceProvider implements PlaceProvider {
       },
       context,
     );
-    return mapAmapGeocodeResponse(response, {
+    return mapAmapGeocodeResponse(geocodeResponse, {
       providerId: this.id,
       fallbackName: query,
     });

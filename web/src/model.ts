@@ -5,6 +5,11 @@ import type {
 
 export type RouteFormState = Readonly<{
   startQuery: string;
+  startPoint: Readonly<{
+    longitude: number;
+    latitude: number;
+  }> | null;
+  requiredStops: readonly string[];
   mode: "running" | "cycling";
   distanceKilometers: number;
   greenery: number;
@@ -15,6 +20,8 @@ export type RouteFormState = Readonly<{
 
 export const INITIAL_ROUTE_FORM: RouteFormState = {
   startQuery: "杭州西湖",
+  startPoint: null,
+  requiredStops: [],
   mode: "running",
   distanceKilometers: 5,
   greenery: 0.9,
@@ -39,10 +46,18 @@ export function buildPlanRequest(
   return {
     schemaVersion: "1",
     requestId,
-    start: {
-      kind: "query",
-      query: form.startQuery.trim(),
-    },
+    start: form.startPoint
+      ? {
+          kind: "point",
+          longitude: form.startPoint.longitude,
+          latitude: form.startPoint.latitude,
+          crs: "WGS84",
+          label: form.startQuery.trim() || "我的当前位置",
+        }
+      : {
+          kind: "query",
+          query: form.startQuery.trim(),
+        },
     mode: form.mode,
     targetDistanceMeters: Math.round(
       clampDistanceKilometers(
@@ -56,6 +71,14 @@ export function buildPlanRequest(
       lowTraffic: form.lowTraffic,
       comfort: 0,
     },
+    ...(form.requiredStops.length > 0
+      ? {
+          requiredStops: form.requiredStops.map((query) => ({
+            kind: "query" as const,
+            query: query.trim(),
+          })),
+        }
+      : {}),
     maxResults: form.maxResults,
   };
 }

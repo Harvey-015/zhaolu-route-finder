@@ -127,8 +127,11 @@ test("keeps the JS API security code in a same-origin allowlisted proxy", async 
   assert.equal(forbidden.status, 403);
 });
 
-test("maps an AMap geocode fixture to a provider-neutral place", async () => {
-  const queue = queuedFetcher([await fixture("geocode-success.json")]);
+test("uses POI search first and falls back to geocoding", async () => {
+  const queue = queuedFetcher([
+    await fixture("place-text-empty.json"),
+    await fixture("geocode-success.json"),
+  ]);
   const client = new AmapWebServiceClient({
     apiKey: "fixture-key",
     fetcher: queue.fetcher,
@@ -143,11 +146,33 @@ test("maps an AMap geocode fixture to a provider-neutral place", async () => {
   assert.equal(place.name, "浙江省杭州市西湖区西湖风景名胜区");
   assert.equal(place.point.crs, "WGS84");
   assert.equal(place.source.providerId, "amap-place");
-  assert.equal(queue.calls.length, 1);
-  assert.equal(queue.calls[0].url.pathname, "/v3/geocode/geo");
-  assert.equal(queue.calls[0].url.searchParams.get("address"), "杭州西湖");
+  assert.equal(queue.calls.length, 2);
+  assert.equal(queue.calls[0].url.pathname, "/v3/place/text");
+  assert.equal(queue.calls[0].url.searchParams.get("keywords"), "杭州西湖");
   assert.equal(queue.calls[0].url.searchParams.get("city"), "杭州");
-  assert.equal(queue.calls[0].url.searchParams.get("key"), "fixture-key");
+  assert.equal(queue.calls[1].url.pathname, "/v3/geocode/geo");
+  assert.equal(queue.calls[1].url.searchParams.get("address"), "杭州西湖");
+  assert.equal(queue.calls[1].url.searchParams.get("key"), "fixture-key");
+});
+
+test("maps the first AMap POI result to a provider-neutral place", async () => {
+  const queue = queuedFetcher([await fixture("place-text-success.json")]);
+  const provider = new AmapPlaceProvider(
+    new AmapWebServiceClient({
+      apiKey: "fixture-key",
+      fetcher: queue.fetcher,
+    }),
+  );
+
+  const place = await provider.resolve(
+    { input: { kind: "query", query: "西湖风景区" } },
+    context,
+  );
+
+  assert.equal(place.name, "西湖风景名胜区");
+  assert.equal(place.source.externalId, "B0FFG9G3B6");
+  assert.equal(place.point.crs, "WGS84");
+  assert.equal(queue.calls.length, 1);
 });
 
 test("resolves an already normalized point without calling AMap", async () => {
@@ -170,8 +195,11 @@ test("resolves an already normalized point without calling AMap", async () => {
   assert.equal(queue.calls.length, 0);
 });
 
-test("maps an empty geocode result to NOT_FOUND", async () => {
-  const queue = queuedFetcher([await fixture("geocode-empty.json")]);
+test("maps empty POI and geocode results to NOT_FOUND", async () => {
+  const queue = queuedFetcher([
+    await fixture("place-text-empty.json"),
+    await fixture("geocode-empty.json"),
+  ]);
   const provider = new AmapPlaceProvider(
     new AmapWebServiceClient({
       apiKey: "fixture-key",
@@ -214,7 +242,7 @@ test("maps AMap quota responses to a stable provider error", async () => {
 });
 
 test("retries one transient HTTP failure in the shared AMap client", async () => {
-  const success = await fixture("geocode-success.json");
+  const success = await fixture("place-text-success.json");
   let attempts = 0;
   const fetcher: AmapFetch = async () => {
     attempts += 1;
@@ -276,7 +304,7 @@ test("enforces the request physical-call budget before a retry", async () => {
 });
 
 test("enforces a shared per-minute AMap attempt ceiling", async () => {
-  const success = await fixture("geocode-success.json");
+  const success = await fixture("place-text-success.json");
   let attempts = 0;
   const provider = new AmapPlaceProvider(
     new AmapWebServiceClient({
