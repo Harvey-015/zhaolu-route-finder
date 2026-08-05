@@ -11,6 +11,8 @@
 
 [打开 Cloudflare 公网演示站](https://zhaolu-route-finder.wuchunkai55.workers.dev)
 
+[![找路路线规划界面展示](docs/images/route-planner-showcase.png)](https://zhaolu-route-finder.wuchunkai55.workers.dev)
+
 演示站默认按景德镇区域优化地点排序，仍允许搜索其他城市；路线、卫星底图与环境数据
 分别受高德和 ESA WorldCover 的可用性、额度与许可约束。
 
