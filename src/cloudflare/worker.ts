@@ -25,6 +25,10 @@ type Runtime = Readonly<{
 }>;
 
 const runtimes = new WeakMap<object, Runtime>();
+// AMap JS API 2.0 constructs its WebGL renderer dynamically. The provider
+// fails with `U.Module.WebGLRender is not a constructor` without unsafe-eval.
+const contentSecurityPolicy =
+  "default-src 'self'; base-uri 'none'; connect-src 'self' https://*.amap.com https://*.autonavi.com; font-src 'self' data: https://*.amap.com https://*.autonavi.com; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; object-src 'none'; script-src 'self' 'unsafe-eval' https://webapi.amap.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:";
 
 function integer(
   value: string | undefined,
@@ -239,6 +243,7 @@ function clientRequest(request: Request): Request {
 
 function secureAssetResponse(response: Response, url: URL): Response {
   const headers = new Headers(response.headers);
+  headers.set("content-security-policy", contentSecurityPolicy);
   headers.set("permissions-policy", "camera=(), geolocation=(self), microphone=()");
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("x-content-type-options", "nosniff");

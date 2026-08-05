@@ -150,9 +150,11 @@ test("uses POI search first and falls back to geocoding", async () => {
   assert.equal(queue.calls[0].url.pathname, "/v3/place/text");
   assert.equal(queue.calls[0].url.searchParams.get("keywords"), "杭州西湖");
   assert.equal(queue.calls[0].url.searchParams.get("city"), "杭州");
+  assert.equal(queue.calls[0].init.redirect, "manual");
   assert.equal(queue.calls[1].url.pathname, "/v3/geocode/geo");
   assert.equal(queue.calls[1].url.searchParams.get("address"), "杭州西湖");
   assert.equal(queue.calls[1].url.searchParams.get("key"), "fixture-key");
+  assert.equal(queue.calls[1].init.redirect, "manual");
 });
 
 test("maps the first AMap POI result to a provider-neutral place", async () => {
