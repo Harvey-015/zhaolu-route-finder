@@ -4,6 +4,8 @@ web-dist/
 playwright-report/
 test-results/
 .codex-runtime/
+.dev.vars
+.wrangler/
 data/
 *.tsbuildinfo
 

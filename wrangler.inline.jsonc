@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zhaolu-route-finder",
+  "main": "dist/cloudflare-inline/worker.mjs",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zhaolu-route-finder",
+      "database_id": "20a89fde-c7bb-4566-9ed7-e38513947c66",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "AMAP_CITY": "景德镇",
+    "AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN": "24",
+    "AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE": "300",
+    "AMAP_ROUTE_EXPORTS_ALLOWED": "false",
+    "ZHAOLU_OPERATOR_NAME": "找路开源项目维护者",
+    "ZHAOLU_PRIVACY_CONTACT": "https://github.com/Harvey-015/zhaolu-route-finder/issues",
+    "ZHAOLU_LOG_RETENTION_DAYS": "30",
+    "RATE_LIMIT_PLAN_PER_MINUTE": "30",
+    "RATE_LIMIT_SESSION_PER_HOUR": "10",
+    "RATE_LIMIT_USER_DATA_PER_MINUTE": "120"
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

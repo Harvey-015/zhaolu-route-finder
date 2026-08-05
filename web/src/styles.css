@@ -825,6 +825,19 @@ input:focus-visible,
   stroke-width: 4;
 }
 
+.required-stop-marker circle {
+  fill: #ff8b5b;
+  stroke: var(--forest-deep);
+  stroke-width: 3;
+}
+
+.required-stop-marker text {
+  fill: var(--forest-deep);
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
 .start-flag {
   fill: var(--orange);
   stroke: var(--forest-deep);
@@ -997,6 +1010,31 @@ input:focus-visible,
   color: #74532e;
   font-size: 10px;
   line-height: 1.55;
+}
+
+.warning-box p {
+  margin: 0;
+}
+
+.warning-box p + p {
+  margin-top: 6px;
+}
+
+.resolved-stops {
+  display: grid;
+  gap: 5px;
+  margin: -6px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #dedfd7;
+  border-radius: 8px;
+  background: #f7f6ef;
+  color: #52645c;
+  font-size: 9px;
+}
+
+.resolved-stops strong {
+  color: var(--forest-deep);
+  font-size: 10px;
 }
 
 .route-list {

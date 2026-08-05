@@ -19,7 +19,7 @@
 
 当前仓库是正式版本的模块化核心，不包含旧产品原型。已经实现内部标准模型、坐标类型、核心用例、最小 Provider 端口、候选与选择策略、Fake Provider 和离线测试。
 
-第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、SQLite、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成统一生产运行时、容器定义、CI、Secret 校验、限流、就绪探针、受保护指标、脱敏日志、优雅关闭和只读生产烟雾。实际生产发布仍取决于外部部署平台、域名、TLS、Secret 和数据卷。
+第二阶段已经完成高德地点和路线 Adapter、DTO Mapper、GCJ-02/WGS-84 转换、集中 HTTP 策略、离线契约测试和受控在线冒烟。第三阶段已经完成 WorldCover COG 数据访问、栅格类别映射、WGS-84 路线采样、风景特征转换、降级策略、离线测试和受控在线冒烟。第四阶段已经完成版本化 Server API、生产依赖组装、OpenAPI 3.1 契约和本地 HTTP 冒烟。第五阶段已经完成 React Web UI、路线条件、结果比较、GeoJSON 几何预览和响应式浏览器验收。第六阶段已经完成 GPX/GeoJSON 导出、高德 URI 交接、条件分享、Provider policy、可替换用户数据端口、匿名签名会话、收藏、反馈和过期策略。第七阶段已经完成 Node 容器 + SQLite 与 Cloudflare Workers + D1 两种运行时，并保留可选 R2 缓存 Adapter；CI、Secret 校验、限流、就绪探针、日志和只读生产烟雾共用同一质量门禁。两种运行时共享 Server API、Provider 和推荐算法；实际生产发布仍取决于外部部署平台、域名、TLS、Secret、额度和合规配置。
 
 ## 2. 架构原则
 
@@ -435,8 +435,8 @@ type RouteSelectionStrategy = (
 ```ts
 const algorithm = defineRecommendationAlgorithm({
   id: "scenic-route",
-  version: "1",
-  displayName: "风景环线推荐 v1",
+  version: "2",
+  displayName: "风景环线推荐 v2",
   candidateGenerationStrategy,
   scoringPolicy,
   routeSelectionStrategy,
@@ -511,7 +511,7 @@ china-default
 ├─ geocoding: AMap（POI 未命中时兜底）
 ├─ places: AMap POI text search
 ├─ scenery: ESA WorldCover
-├─ recommendationAlgorithm: scenic-route@1
+├─ recommendationAlgorithm: scenic-route@2
 └─ navigation: AMap
 ```
 
@@ -882,8 +882,13 @@ Core 不反向依赖 Adapters
 
 ### 14.1 在线推荐性能策略
 
-- 候选数量由请求的 `maxResults` 决定，并继续受 `maxCandidates` 与
-  `maxRouteProviderCalls` 双重上限保护；默认不会为了返回一条路线固定生成六条候选。
+- 核心先生成 12 条不调用道路 Provider 的本地候选骨架，再按直线估距、环境锚点排名和
+  方向差异预筛。只有预筛结果会调用道路 Provider；在线数量继续受 `maxCandidates`、
+  `maxRouteProviderCalls` 和剩余物理 HTTP 预算共同约束。没有环境锚点时默认只规划
+  `maxResults` 条，保持普通路线的响应速度。
+- 目标距离优先使用 ±15% 容差；只有 ±25% 内的结果可以作为明确标注的放宽路线返回。
+  每条路线还必须按顺序贴近所有必经点。超过 ±25% 时仅在剩余预算足够的情况下进行一次
+  引导点缩放重试，不执行无上限迭代。
 - 道路 Provider 使用有上限的候选并发，默认最多同时处理三个候选；物理 HTTP 调用预算、
   每分钟配额和取消信号仍由核心统一约束。
 - 风景 Provider 有独立的锚点与评分软等待预算。环境数据过慢时先返回真实道路路线和

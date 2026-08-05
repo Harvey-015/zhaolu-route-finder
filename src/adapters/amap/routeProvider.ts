@@ -1,5 +1,6 @@
 import {
   distanceMeters,
+  pathDirectionDegrees,
   type Wgs84Point,
 } from "../../route-recommendation/coordinates.ts";
 import { ProviderError } from "../../route-recommendation/errors.ts";
@@ -128,7 +129,10 @@ export class AmapRouteProvider implements RouteProvider {
       segments,
       distanceMeters: totalDistance,
       durationSeconds: hasCompleteDuration ? totalDuration : null,
-      directionDegrees: request.candidate.directionDegrees,
+      directionDegrees: pathDirectionDegrees(
+        request.candidate.origin,
+        geometry,
+      ),
       source: {
         providerId: this.id,
         externalId: request.candidate.id,

@@ -19,6 +19,7 @@ import { AmapRouteProvider } from "../src/adapters/amap/routeProvider.ts";
 import {
   distanceMeters,
   gcj02Point,
+  pathDirectionDegrees,
   wgs84Point,
 } from "../src/route-recommendation/coordinates.ts";
 import { ProviderError } from "../src/route-recommendation/errors.ts";
@@ -139,7 +140,10 @@ test("uses POI search first and falls back to geocoding", async () => {
   const provider = new AmapPlaceProvider(client, { city: "杭州" });
 
   const place = await provider.resolve(
-    { input: { kind: "query", query: "杭州西湖" } },
+    {
+      input: { kind: "query", query: "杭州西湖" },
+      near: wgs84Point(120.149, 30.259),
+    },
     context,
   );
 
@@ -150,9 +154,45 @@ test("uses POI search first and falls back to geocoding", async () => {
   assert.equal(queue.calls[0].url.pathname, "/v3/place/text");
   assert.equal(queue.calls[0].url.searchParams.get("keywords"), "杭州西湖");
   assert.equal(queue.calls[0].url.searchParams.get("city"), "杭州");
+  assert.equal(queue.calls[0].url.searchParams.get("sortrule"), "distance");
+  assert.match(
+    queue.calls[0].url.searchParams.get("location") ?? "",
+    /^\d+\.\d+,\d+\.\d+$/,
+  );
+  assert.equal(queue.calls[0].init.redirect, "manual");
   assert.equal(queue.calls[1].url.pathname, "/v3/geocode/geo");
   assert.equal(queue.calls[1].url.searchParams.get("address"), "杭州西湖");
   assert.equal(queue.calls[1].url.searchParams.get("key"), "fixture-key");
+  assert.equal(queue.calls[1].init.redirect, "manual");
+});
+
+test("tries the formal people's-government POI name before geocoding", async () => {
+  const queue = queuedFetcher([
+    await fixture("place-text-empty.json"),
+    await fixture("place-text-success.json"),
+  ]);
+  const provider = new AmapPlaceProvider(
+    new AmapWebServiceClient({
+      apiKey: "fixture-key",
+      fetcher: queue.fetcher,
+    }),
+    { city: "景德镇" },
+  );
+
+  const place = await provider.resolve(
+    {
+      input: { kind: "query", query: "景德镇市政府" },
+    },
+    context,
+  );
+
+  assert.equal(place.source.providerId, "amap-place");
+  assert.equal(queue.calls.length, 2);
+  assert.equal(
+    queue.calls[1].url.searchParams.get("keywords"),
+    "景德镇市人民政府",
+  );
+  assert.equal(queue.calls[1].url.pathname, "/v3/place/text");
 });
 
 test("maps the first AMap POI result to a provider-neutral place", async () => {
@@ -350,7 +390,10 @@ test("splits a running loop into ordered AMap legs and merges WGS-84 output", as
       fetcher: queue.fetcher,
     }),
   );
-  const candidate = loopCandidate();
+  const candidate = {
+    ...loopCandidate(),
+    directionDegrees: 180,
+  };
 
   const route = await provider.getRoute(
     { candidate, mode: "running" },
@@ -379,6 +422,11 @@ test("splits a running loop into ordered AMap legs and merges WGS-84 output", as
   assert.ok(route.geometry.every(({ crs }) => crs === "WGS84"));
   assert.ok(distanceMeters(route.geometry[0], candidate.origin) < 1);
   assert.ok(distanceMeters(route.geometry.at(-1)!, candidate.origin) < 1);
+  assert.equal(
+    route.directionDegrees,
+    pathDirectionDegrees(candidate.origin, route.geometry),
+  );
+  assert.notEqual(route.directionDegrees, candidate.directionDegrees);
 });
 
 test("uses the bicycling endpoint for cycling candidates", async () => {

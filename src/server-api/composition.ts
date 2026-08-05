@@ -23,8 +23,8 @@ import type { PlanScenicRoutes } from "./handler.ts";
 export const defaultRecommendationAlgorithm =
   defineRecommendationAlgorithm({
     id: "scenic-route",
-    version: "1",
-    displayName: "风景环线推荐 v1",
+    version: "2",
+    displayName: "风景环线推荐 v2",
     candidateGenerationStrategy: generateDirectionalCandidates,
     scoringPolicy: new ScenicScoreV1(),
     routeSelectionStrategy: selectDiverseRoutes,
@@ -61,6 +61,7 @@ export type ProductionRoutePlannerOptions = Readonly<{
   amapWebServiceKey: string;
   amapCity?: string;
   amapMaxHttpAttemptsPerMinute?: number;
+  sceneryProvider?: SceneryProvider;
   algorithm?: RecommendationAlgorithmProfile;
   limits?: Partial<FindScenicRoutesLimits>;
 }>;
@@ -70,13 +71,15 @@ export function createProductionRoutePlanner(
 ): PlanScenicRoutes {
   const client = new AmapWebServiceClient({
     apiKey: options.amapWebServiceKey,
+    maxAttempts: 3,
     maxAttemptsPerMinute: options.amapMaxHttpAttemptsPerMinute,
   });
   const placeProvider = new AmapPlaceProvider(client, {
     city: options.amapCity,
   });
   const routeProvider = new AmapRouteProvider(client);
-  const sceneryProvider = new WorldCoverSceneryProvider();
+  const sceneryProvider =
+    options.sceneryProvider ?? new WorldCoverSceneryProvider();
 
   return createRoutePlanner({
     placeProvider,

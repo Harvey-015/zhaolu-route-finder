@@ -160,13 +160,13 @@ test("issues an authenticated session and manages saved routes and feedback", as
     assert.equal(deleteResponse.status, 200);
 
     now += 31 * 24 * 60 * 60 * 1_000;
-    assert.ok(userData.purgeExpired() >= 1);
+    assert.ok((await userData.purgeExpired()) >= 1);
   } finally {
-    store.close();
+    await store.close();
   }
 });
 
-test("stores only metadata for an AMap route policy", () => {
+test("stores only metadata for an AMap route policy", async () => {
   const now = 1_800_000_000_000;
   const store = new SqliteUserDataStore(":memory:");
   const sessions = new SignedSessionService(
@@ -181,14 +181,14 @@ test("stores only metadata for an AMap route policy", () => {
   });
 
   try {
-    const issued = userData.issueSession();
+    const issued = await userData.issueSession();
     const authRequest = new Request("http://localhost", {
       headers: {
         authorization: `Bearer ${issued.token}`,
       },
     });
-    const userId = userData.authenticate(authRequest);
-    const summary = userData.saveRoute(userId, {
+    const userId = await userData.authenticate(authRequest);
+    const summary = await userData.saveRoute(userId, {
       schemaVersion: "1",
       name: "高德路线",
       request: REQUEST,
@@ -200,13 +200,13 @@ test("stores only metadata for an AMap route policy", () => {
         delivery: resolveFixtureRouteDeliveryPolicy("amap-route"),
       },
     });
-    const record = store.getSavedRoute(userId, summary.id, now);
+    const record = await store.getSavedRoute(userId, summary.id, now);
 
     assert.equal(summary.hasGeometry, false);
     assert.equal(record?.route, null);
     assert.equal(record?.policy.persistence, "metadata-only");
   } finally {
-    store.close();
+    await store.close();
   }
 });
 
@@ -230,20 +230,20 @@ test("deletes an anonymous session with all saved routes and feedback", async ()
   });
 
   try {
-    const session = userData.issueSession();
+    const session = await userData.issueSession();
     const authRequest = new Request("http://localhost", {
       headers: {
         authorization: "Bearer " + session.token,
       },
     });
-    const userId = userData.authenticate(authRequest);
-    const saved = userData.saveRoute(userId, {
+    const userId = await userData.authenticate(authRequest);
+    const saved = await userData.saveRoute(userId, {
       schemaVersion: "1",
       name: "待全部删除",
       request: REQUEST,
       route: DELIVERY_TEST_ROUTE,
     });
-    userData.addFieldReport(userId, saved.id, {
+    await userData.addFieldReport(userId, saved.id, {
       schemaVersion: "1",
       rating: 4,
       note: "测试反馈",
@@ -264,21 +264,21 @@ test("deletes an anonymous session with all saved routes and feedback", async ()
     assert.equal(response.status, 200);
     assert.equal(typeof body.requestId, "string");
     assert.equal(body.deleted, true);
-    assert.equal(store.hasSession(userId, now), false);
-    assert.deepEqual(store.listSavedRoutes(userId, now), []);
-    assert.equal(store.getSavedRoute(userId, saved.id, now), null);
-    assert.throws(
+    assert.equal(await store.hasSession(userId, now), false);
+    assert.deepEqual(await store.listSavedRoutes(userId, now), []);
+    assert.equal(await store.getSavedRoute(userId, saved.id, now), null);
+    await assert.rejects(
       () => userData.authenticate(authRequest),
       (error: unknown) =>
         error instanceof UserDataError &&
         error.code === "UNAUTHORIZED",
     );
   } finally {
-    store.close();
+    await store.close();
   }
 });
 
-test("rejects malformed saved-route inputs before persistence", () => {
+test("rejects malformed saved-route inputs before persistence", async () => {
   const now = 1_800_000_000_000;
   const store = new SqliteUserDataStore(":memory:");
   const userData = new UserDataService({
@@ -290,8 +290,8 @@ test("rejects malformed saved-route inputs before persistence", () => {
     policyResolver: resolveFixtureRouteDeliveryPolicy,
     now: () => now,
   });
-  const issued = userData.issueSession();
-  const userId = userData.authenticate(
+  const issued = await userData.issueSession();
+  const userId = await userData.authenticate(
     new Request("http://localhost", {
       headers: { authorization: `Bearer ${issued.token}` },
     }),
@@ -349,22 +349,22 @@ test("rejects malformed saved-route inputs before persistence", () => {
   ];
 
   try {
-    invalidValues.forEach((value) => {
-      assert.throws(
+    for (const value of invalidValues) {
+      await assert.rejects(
         () => userData.saveRoute(userId, value),
         (error: unknown) =>
           error instanceof UserDataError &&
           error.status === 400 &&
           error.code === "INVALID_REQUEST",
       );
-    });
-    assert.deepEqual(userData.listSavedRoutes(userId), []);
+    }
+    assert.deepEqual(await userData.listSavedRoutes(userId), []);
   } finally {
-    store.close();
+    await store.close();
   }
 });
 
-test("migrates legacy SQLite files and rejects newer schemas", () => {
+test("migrates legacy SQLite files and rejects newer schemas", async () => {
   const root = mkdtempSync(join(tmpdir(), "zhaolu-migrations-"));
   const legacyPath = join(root, "legacy.sqlite");
   const futurePath = join(root, "future.sqlite");
@@ -383,8 +383,11 @@ test("migrates legacy SQLite files and rejects newer schemas", () => {
     legacy.close();
 
     const migrated = new SqliteUserDataStore(legacyPath);
-    assert.equal(migrated.hasSession("legacy-user", expiresAt - 1), true);
-    migrated.close();
+    assert.equal(
+      await migrated.hasSession("legacy-user", expiresAt - 1),
+      true,
+    );
+    await migrated.close();
 
     const inspected = new DatabaseSync(legacyPath);
     const version = inspected.prepare("PRAGMA user_version").get() as {
@@ -410,7 +413,7 @@ test("migrates legacy SQLite files and rejects newer schemas", () => {
   }
 });
 
-test("deduplicates saved routes by user-scoped idempotency key", () => {
+test("deduplicates saved routes by user-scoped idempotency key", async () => {
   let now = 1_800_000_000_000;
   const store = new SqliteUserDataStore(":memory:");
   const userData = new UserDataService({
@@ -424,8 +427,8 @@ test("deduplicates saved routes by user-scoped idempotency key", () => {
   });
 
   try {
-    const session = userData.issueSession();
-    const userId = userData.authenticate(
+    const session = await userData.issueSession();
+    const userId = await userData.authenticate(
       new Request("http://localhost", {
         headers: { authorization: `Bearer ${session.token}` },
       }),
@@ -436,25 +439,29 @@ test("deduplicates saved routes by user-scoped idempotency key", () => {
       request: REQUEST,
       route: DELIVERY_TEST_ROUTE,
     };
-    const first = userData.saveRoute(userId, input, "save-operation-1");
-    const second = userData.saveRoute(
+    const first = await userData.saveRoute(
+      userId,
+      input,
+      "save-operation-1",
+    );
+    const second = await userData.saveRoute(
       userId,
       { ...input, name: "不会产生第二条" },
       "save-operation-1",
     );
 
     assert.equal(second.id, first.id);
-    assert.equal(userData.listSavedRoutes(userId).length, 1);
+    assert.equal((await userData.listSavedRoutes(userId)).length, 1);
 
     now += 30 * 24 * 60 * 60 * 1_000;
-    const afterExpiry = userData.saveRoute(
+    const afterExpiry = await userData.saveRoute(
       userId,
       input,
       "save-operation-1",
     );
     assert.notEqual(afterExpiry.id, first.id);
-    assert.equal(userData.listSavedRoutes(userId).length, 1);
+    assert.equal((await userData.listSavedRoutes(userId)).length, 1);
   } finally {
-    store.close();
+    await store.close();
   }
 });

@@ -73,17 +73,20 @@ export async function startProductionRuntime(
     sessions: new SignedSessionService(config.sessionSecret),
     policyResolver: deliveryPolicyResolver,
   });
-  const initialPurgedRecords = userData.purgeExpired();
+  const initialPurgedRecords = await userData.purgeExpired();
   if (initialPurgedRecords > 0) {
     logger.info("expired_records_purged", {
       count: initialPurgedRecords,
     });
   }
   const expiryCleanup = setInterval(() => {
-    const count = userData.purgeExpired();
-    if (count > 0) {
-      logger.info("expired_records_purged", { count });
-    }
+    void userData.purgeExpired().then((count) => {
+      if (count > 0) {
+        logger.info("expired_records_purged", { count });
+      }
+    }).catch(() => {
+      logger.error("expired_records_purge_failed");
+    });
   }, 60 * 60_000);
   expiryCleanup.unref();
   const planRoutes = createProductionRoutePlanner({
@@ -104,7 +107,7 @@ export async function startProductionRuntime(
     rateLimiter,
     eventLogger: logger,
     readinessCheck: async () => ({
-      database: store.isHealthy() ? "ok" : "error",
+      database: (await store.isHealthy()) ? "ok" : "error",
       staticFiles: existsSync(
         join(config.staticRoot, "index.html"),
       )
@@ -153,9 +156,10 @@ export async function startProductionRuntime(
       forceTimer.unref();
       server.close(() => {
         clearTimeout(forceTimer);
-        store.close();
-        logger.info("runtime_stopped", { reason });
-        resolveClose();
+        void store.close().then(() => {
+          logger.info("runtime_stopped", { reason });
+          resolveClose();
+        });
       });
     });
     return closing;
@@ -179,7 +183,7 @@ export async function startProductionRuntime(
   } catch (error) {
     clearInterval(expiryCleanup);
     clearInterval(backupMetricsRefresh);
-    store.close();
+    await store.close();
     throw error;
   }
 

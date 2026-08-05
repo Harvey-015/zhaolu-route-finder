@@ -26,7 +26,7 @@ test("creates an online SQLite backup and passes an isolated restore drill", asy
   mkdirSync(join(root, "data"));
   mkdirSync(backupDirectory);
   const store = new SqliteUserDataStore(databasePath);
-  store.createSession({
+  await store.createSession({
     userId: "11111111-1111-4111-8111-111111111111",
     expiresAt: Date.parse("2026-09-01T00:00:00.000Z"),
   });
@@ -59,7 +59,7 @@ test("creates an online SQLite backup and passes an isolated restore drill", asy
       result.metadata,
     );
   } finally {
-    store.close();
+    await store.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

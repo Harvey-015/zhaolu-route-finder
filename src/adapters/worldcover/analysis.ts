@@ -202,6 +202,28 @@ function maskHasValueNear(
   return count > 0;
 }
 
+function maskRatioNear(
+  integral: Uint32Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+): number {
+  const stride = width + 1;
+  const left = Math.max(0, x - radiusX);
+  const right = Math.min(width - 1, x + radiusX);
+  const top = Math.max(0, y - radiusY);
+  const bottom = Math.min(height - 1, y + radiusY);
+  const count =
+    integral[(bottom + 1) * stride + right + 1] -
+    integral[top * stride + right + 1] -
+    integral[(bottom + 1) * stride + left] +
+    integral[top * stride + left];
+  return count / ((right - left + 1) * (bottom - top + 1));
+}
+
 function neighborhoodPixelRadius(
   grid: WorldCoverGrid,
   radiusMeters: number,
@@ -241,6 +263,11 @@ export function rankWorldCoverAnchors(
     (value) => WATER_CLASSES.has(value),
   );
   const waterRadius = neighborhoodPixelRadius(grid, 250);
+  const builtIntegral = maskIntegral(
+    grid,
+    (value) => value === BUILT_CLASS,
+  );
+  const builtRadius = neighborhoodPixelRadius(grid, 400);
   const candidates: WorldCoverAnchorCandidate[] = [];
 
   for (let index = 0; index < grid.values.length; index += 1) {
@@ -262,12 +289,26 @@ export function rankWorldCoverAnchors(
     )
       ? 1
       : 0;
-    if (green === 0 && waterfront === 0) continue;
-    const built = classCode === BUILT_CLASS ? 1 : 0;
+    const builtExposure = maskRatioNear(
+      builtIntegral,
+      grid.width,
+      grid.height,
+      x,
+      y,
+      builtRadius.x,
+      builtRadius.y,
+    );
+    if (
+      green === 0 &&
+      waterfront === 0 &&
+      (preferences.lowTraffic === 0 || builtExposure > 0.35)
+    ) {
+      continue;
+    }
     const score =
       green * preferences.greenery +
       waterfront * preferences.waterfront +
-      (1 - built) * preferences.lowTraffic * 0.15;
+      (1 - builtExposure) * preferences.lowTraffic;
     candidates.push({ point, classCode, score });
   }
 

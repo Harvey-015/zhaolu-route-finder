@@ -161,14 +161,14 @@ export class SqliteUserDataStore implements UserDataStore {
     this.database = database;
   }
 
-  isHealthy(): boolean {
+  async isHealthy(): Promise<boolean> {
     const result = this.database
       .prepare("SELECT 1 AS healthy")
       .get() as { healthy?: number } | undefined;
     return result?.healthy === 1;
   }
 
-  createSession(session: UserSession): void {
+  async createSession(session: UserSession): Promise<void> {
     this.database
       .prepare(
         `INSERT INTO user_sessions (user_id, expires_at)
@@ -178,7 +178,7 @@ export class SqliteUserDataStore implements UserDataStore {
       .run(session.userId, session.expiresAt);
   }
 
-  hasSession(userId: string, now: number): boolean {
+  async hasSession(userId: string, now: number): Promise<boolean> {
     return Boolean(
       this.database
         .prepare(
@@ -190,14 +190,14 @@ export class SqliteUserDataStore implements UserDataStore {
     );
   }
 
-  deleteUserData(userId: string): boolean {
+  async deleteUserData(userId: string): Promise<boolean> {
     const result = this.database
       .prepare("DELETE FROM user_sessions WHERE user_id = ?")
       .run(userId);
     return result.changes === 1;
   }
 
-  saveRoute(record: SavedRouteRecord): void {
+  async saveRoute(record: SavedRouteRecord): Promise<void> {
     this.database
       .prepare(
         `INSERT INTO saved_routes (
@@ -224,11 +224,11 @@ export class SqliteUserDataStore implements UserDataStore {
       );
   }
 
-  findSavedRouteByIdempotencyKey(
+  async findSavedRouteByIdempotencyKey(
     userId: string,
     idempotencyKey: string,
     now: number,
-  ): SavedRouteSummary | null {
+  ): Promise<SavedRouteSummary | null> {
     const row = this.database
       .prepare(
         `SELECT *
@@ -247,10 +247,10 @@ export class SqliteUserDataStore implements UserDataStore {
     return row ? summary(row) : null;
   }
 
-  listSavedRoutes(
+  async listSavedRoutes(
     userId: string,
     now: number,
-  ): readonly SavedRouteSummary[] {
+  ): Promise<readonly SavedRouteSummary[]> {
     return (
       this.database
         .prepare(
@@ -264,11 +264,11 @@ export class SqliteUserDataStore implements UserDataStore {
     ).map(summary);
   }
 
-  getSavedRoute(
+  async getSavedRoute(
     userId: string,
     routeId: string,
     now: number,
-  ): SavedRouteRecord | null {
+  ): Promise<SavedRouteRecord | null> {
     const row = this.database
       .prepare(
         `SELECT *
@@ -287,7 +287,10 @@ export class SqliteUserDataStore implements UserDataStore {
     } as SavedRouteRecord;
   }
 
-  deleteSavedRoute(userId: string, routeId: string): boolean {
+  async deleteSavedRoute(
+    userId: string,
+    routeId: string,
+  ): Promise<boolean> {
     const result = this.database
       .prepare(
         "DELETE FROM saved_routes WHERE id = ? AND user_id = ?",
@@ -296,7 +299,7 @@ export class SqliteUserDataStore implements UserDataStore {
     return result.changes === 1;
   }
 
-  addFieldReport(report: FieldReport): void {
+  async addFieldReport(report: FieldReport): Promise<void> {
     this.database
       .prepare(
         `INSERT INTO field_reports (
@@ -314,7 +317,7 @@ export class SqliteUserDataStore implements UserDataStore {
       );
   }
 
-  purgeExpired(now: number): number {
+  async purgeExpired(now: number): Promise<number> {
     const reports = this.database
       .prepare("DELETE FROM field_reports WHERE expires_at <= ?")
       .run(now).changes;
@@ -327,7 +330,7 @@ export class SqliteUserDataStore implements UserDataStore {
     return Number(reports) + Number(routes) + Number(sessions);
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.database.close();
   }
 }

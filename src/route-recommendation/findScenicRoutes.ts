@@ -14,6 +14,12 @@ import {
   type RoutedRoute,
   type ScenicAnchor,
 } from "./models.ts";
+import {
+  bearingDegrees,
+  destinationPoint,
+  distanceMeters,
+  type Wgs84Point,
+} from "./coordinates.ts";
 import type {
   FindScenicRoutesDependencies,
   FindScenicRoutesLimits,
@@ -31,6 +37,12 @@ const DEFAULT_LIMITS: FindScenicRoutesLimits = {
   maxSceneryAnalysisWaitMs: 1_500,
   maxOverlapRatio: 0.82,
 };
+
+const LOCAL_CANDIDATE_COUNT = 12;
+const ESTIMATED_ROAD_FACTOR = 1.18;
+const PRIMARY_DISTANCE_TOLERANCE = 0.15;
+const RELAXED_DISTANCE_TOLERANCE = 0.25;
+const REQUIRED_STOP_TOLERANCE_METERS = 80;
 
 function validateWeight(name: string, value: number) {
   if (!Number.isFinite(value) || value < 0 || value > 1) {
@@ -214,6 +226,189 @@ function constrainCandidates(
     candidateIds.add(id);
   });
   return candidates;
+}
+
+function polylineDistance(points: readonly Wgs84Point[]): number {
+  return points.slice(1).reduce(
+    (total, point, index) =>
+      total + distanceMeters(points[index], point),
+    0,
+  );
+}
+
+function angularDifference(left: number, right: number): number {
+  const difference = Math.abs(left - right) % 360;
+  return Math.min(difference, 360 - difference);
+}
+
+function candidateSignature(candidate: RouteCandidate): string {
+  return candidate.waypoints
+    .map(
+      ({ longitude, latitude }) =>
+        `${longitude.toFixed(5)},${latitude.toFixed(5)}`,
+    )
+    .join(";");
+}
+
+function preselectCandidates(
+  candidates: readonly RouteCandidate[],
+  scenicAnchors: readonly ScenicAnchor[],
+  targetDistanceMeters: number,
+  limit: number,
+): RouteCandidate[] {
+  const anchorRanks = new Map(
+    scenicAnchors.map(({ id }, index) => [id, index]),
+  );
+  const uniqueCandidates = candidates.filter(
+    (candidate, index, values) =>
+      values.findIndex(
+        (other) => candidateSignature(other) === candidateSignature(candidate),
+      ) === index,
+  );
+  const ranked = uniqueCandidates
+    .map((candidate) => {
+      const estimatedRoadDistance =
+        polylineDistance([
+          candidate.origin,
+          ...candidate.waypoints,
+          candidate.destination,
+        ]) * ESTIMATED_ROAD_FACTOR;
+      const anchorRank = candidate.scenicAnchorIds
+        .map((id) => anchorRanks.get(id))
+        .find((rank): rank is number => rank !== undefined);
+      const preferenceBonus =
+        anchorRank === undefined
+          ? 0
+          : targetDistanceMeters *
+            0.06 *
+            (1 - anchorRank / Math.max(1, scenicAnchors.length));
+      return {
+        candidate,
+        score:
+          Math.abs(estimatedRoadDistance - targetDistanceMeters) -
+          preferenceBonus,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.score - right.score ||
+        left.candidate.id.localeCompare(right.candidate.id),
+    );
+  const selected: typeof ranked = [];
+  const reservedDirectionCount = Math.min(4, limit);
+  const reservedDirections = Array.from(
+    { length: reservedDirectionCount },
+    (_, index) => (index * 360) / reservedDirectionCount,
+  );
+
+  for (const reservedDirection of reservedDirections) {
+    const available = ranked.filter((entry) => !selected.includes(entry));
+    const sectorWidth = 180 / reservedDirectionCount;
+    const inSector = available.filter(
+      ({ candidate }) =>
+        angularDifference(
+          candidate.directionDegrees,
+          reservedDirection,
+        ) <= sectorWidth,
+    );
+    const entry = (inSector.length > 0 ? inSector : available).sort(
+      (left, right) =>
+        angularDifference(
+          left.candidate.directionDegrees,
+          reservedDirection,
+        ) -
+          angularDifference(
+            right.candidate.directionDegrees,
+            reservedDirection,
+          ) ||
+        left.score - right.score ||
+        left.candidate.id.localeCompare(right.candidate.id),
+    )[0];
+    if (entry) selected.push(entry);
+  }
+
+  for (const entry of ranked) {
+    if (selected.length >= limit) break;
+    if (!selected.includes(entry)) selected.push(entry);
+  }
+  return selected.map(({ candidate }) => candidate);
+}
+
+function routeVisitsRequiredStops(
+  route: RoutedRoute,
+  candidate: RouteCandidate,
+): boolean {
+  let geometryIndex = 0;
+  for (const { point } of candidate.requiredStops) {
+    let closestIndex = -1;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (
+      let index = geometryIndex;
+      index < route.geometry.length;
+      index += 1
+    ) {
+      const distance = distanceMeters(route.geometry[index], point);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    }
+    if (
+      closestIndex < 0 ||
+      closestDistance > REQUIRED_STOP_TOLERANCE_METERS
+    ) {
+      return false;
+    }
+    geometryIndex = closestIndex;
+  }
+  return true;
+}
+
+function relativeDistanceDifference(
+  route: RoutedRoute,
+  targetDistanceMeters: number,
+): number {
+  return (
+    Math.abs(route.distanceMeters - targetDistanceMeters) /
+    targetDistanceMeters
+  );
+}
+
+function refineCandidateDistance(
+  candidate: RouteCandidate,
+  actualDistanceMeters: number,
+  targetDistanceMeters: number,
+): RouteCandidate | null {
+  const requiredPoints = candidate.requiredStops.map(({ point }) => point);
+  const guidancePoints = candidate.waypoints.filter(
+    (point) =>
+      requiredPoints.every(
+        (requiredPoint) => distanceMeters(point, requiredPoint) > 1,
+      ),
+  );
+  if (guidancePoints.length === 0) return null;
+  const scale = Math.max(
+    0.55,
+    Math.min(1.45, targetDistanceMeters / actualDistanceMeters),
+  );
+  return {
+    ...candidate,
+    id: `${candidate.id}:distance-refined`,
+    waypoints: candidate.waypoints.map((point) => {
+      if (
+        requiredPoints.some(
+          (requiredPoint) => distanceMeters(point, requiredPoint) <= 1,
+        )
+      ) {
+        return point;
+      }
+      return destinationPoint(
+        candidate.origin,
+        distanceMeters(candidate.origin, point) * scale,
+        bearingDegrees(candidate.origin, point),
+      );
+    }),
+  };
 }
 
 function constrainSelectedRoutes(
@@ -407,14 +602,13 @@ export async function findScenicRoutes(
   }
 
   const maxResults = request.maxResults ?? 3;
-  const candidateCount = Math.min(
-    limits.maxCandidates,
-    limits.maxRouteProviderCalls,
-    maxResults,
+  const localCandidateCount = Math.min(
+    24,
+    Math.max(LOCAL_CANDIDATE_COUNT, maxResults * 4),
   );
   let candidates: RouteCandidate[];
   try {
-    candidates = constrainCandidates(
+    const generatedCandidates = constrainCandidates(
       dependencies.candidateGenerationStrategy({
         requestId: request.requestId,
         origin: start.point,
@@ -423,9 +617,38 @@ export async function findScenicRoutes(
         scenicAnchors,
         targetDistanceMeters: request.targetDistanceMeters,
         preferences: request.preferences,
-        count: candidateCount,
+        count: localCandidateCount,
       }),
-      candidateCount,
+      localCandidateCount,
+    );
+    const maximumLegCount = Math.max(
+      1,
+      ...generatedCandidates.map(({ waypoints }) => waypoints.length + 1),
+    );
+    const remainingHttpAttempts =
+      context.physicalCallBudget?.remaining() ??
+      limits.maxProviderHttpAttempts;
+    const budgetCandidateCount = Math.max(
+      1,
+      Math.floor(remainingHttpAttempts / maximumLegCount),
+    );
+    const onlineCandidateBudget = Math.min(
+      limits.maxCandidates,
+      limits.maxRouteProviderCalls,
+      budgetCandidateCount,
+    );
+    const fallbackCandidateCount = requiredStops.length > 0 ? 1 : 0;
+    const onlineCandidateCount = scenicAnchors.length > 0
+      ? onlineCandidateBudget
+      : Math.min(
+          maxResults + fallbackCandidateCount,
+          onlineCandidateBudget,
+        );
+    candidates = preselectCandidates(
+      generatedCandidates,
+      scenicAnchors,
+      request.targetDistanceMeters,
+      onlineCandidateCount,
     );
   } catch (error) {
     throw mapCoreAlgorithmError(error, dependencies.signal);
@@ -447,6 +670,9 @@ export async function findScenicRoutes(
   throwIfAborted(dependencies.signal);
 
   const routedRoutes: RoutedRoute[] = [];
+  const candidateById = new Map(
+    candidates.map((candidate) => [candidate.id, candidate]),
+  );
   const routeFailures: unknown[] = [];
   routeAttempts.forEach((attempt, index) => {
     if (attempt.status === "fulfilled") {
@@ -469,13 +695,103 @@ export async function findScenicRoutes(
     throw routeFailureError(routeFailures);
   }
 
+  const refinementSource = [...routedRoutes]
+    .filter((route) => {
+      const candidate = candidateById.get(route.candidateId);
+      return (
+        candidate !== undefined &&
+        routeVisitsRequiredStops(route, candidate) &&
+        relativeDistanceDifference(
+          route,
+          request.targetDistanceMeters,
+        ) > RELAXED_DISTANCE_TOLERANCE
+      );
+    })
+    .sort(
+      (left, right) =>
+        relativeDistanceDifference(
+          left,
+          request.targetDistanceMeters,
+        ) -
+        relativeDistanceDifference(
+          right,
+          request.targetDistanceMeters,
+        ),
+    )[0];
+  if (refinementSource) {
+    const sourceCandidate = candidateById.get(
+      refinementSource.candidateId,
+    );
+    const refinedCandidate = sourceCandidate
+      ? refineCandidateDistance(
+          sourceCandidate,
+          refinementSource.distanceMeters,
+          request.targetDistanceMeters,
+        )
+      : null;
+    const requiredAttempts = refinedCandidate
+      ? refinedCandidate.waypoints.length + 1
+      : Number.POSITIVE_INFINITY;
+    if (
+      refinedCandidate &&
+      (context.physicalCallBudget?.remaining() ?? 0) >= requiredAttempts
+    ) {
+      try {
+        const refinedRoute = await dependencies.routeProvider.getRoute(
+          { candidate: refinedCandidate, mode: request.mode },
+          context,
+        );
+        assertValidRoute(refinedRoute);
+        candidateById.set(refinedCandidate.id, refinedCandidate);
+        routedRoutes.push(refinedRoute);
+      } catch (error) {
+        warnings.push({
+          code: "ROUTE_CANDIDATE_FAILED",
+          params: {
+            providerId:
+              error instanceof ProviderError
+                ? error.providerId
+                : dependencies.routeProvider.id,
+            candidateId: refinedCandidate.id,
+          },
+        });
+      }
+    }
+  }
+  throwIfAborted(dependencies.signal);
+
+  const constraintValidRoutes = routedRoutes.filter((route) => {
+    const candidate = candidateById.get(route.candidateId);
+    return (
+      candidate !== undefined &&
+      routeVisitsRequiredStops(route, candidate) &&
+      relativeDistanceDifference(route, request.targetDistanceMeters) <=
+        RELAXED_DISTANCE_TOLERANCE
+    );
+  });
+  if (constraintValidRoutes.length === 0) {
+    throw new RouteRecommendationError({
+      code: "NO_SUITABLE_ROUTE",
+      retryable: false,
+      details: {
+        targetDistanceMeters: request.targetDistanceMeters,
+        tolerancePercent: Math.round(
+          RELAXED_DISTANCE_TOLERANCE * 100,
+        ),
+      },
+    });
+  }
+
   let featuresByRoute: ReadonlyMap<
     string,
     ReturnType<typeof unavailableScenicFeatures>
   > = new Map();
   const analysisAttempt = await settleWithin(
     dependencies.sceneryProvider.analyzeRoutes(
-      { routes: routedRoutes, preferences: request.preferences },
+      {
+        routes: constraintValidRoutes,
+        preferences: request.preferences,
+      },
       context,
     ),
     limits.maxSceneryAnalysisWaitMs,
@@ -497,7 +813,7 @@ export async function findScenicRoutes(
   }
 
   const degradedSceneryRouteIds = new Set<string>();
-  const scoredRoutes: RecommendedRoute[] = routedRoutes.map((route) => {
+  const scoredRoutes: RecommendedRoute[] = constraintValidRoutes.map((route) => {
     const providedScenicFeatures = featuresByRoute.get(route.id);
     const scenicFeatures =
       providedScenicFeatures ?? unavailableScenicFeatures();
@@ -547,6 +863,24 @@ export async function findScenicRoutes(
       params: {
         requestedCount: maxResults,
         actualCount: selectedRoutes.length,
+      },
+    });
+  }
+  const relaxedDistanceRouteCount = selectedRoutes.filter(
+    ({ route }) =>
+      relativeDistanceDifference(
+        route,
+        request.targetDistanceMeters,
+      ) > PRIMARY_DISTANCE_TOLERANCE,
+  ).length;
+  if (relaxedDistanceRouteCount > 0) {
+    warnings.push({
+      code: "DISTANCE_TOLERANCE_RELAXED",
+      params: {
+        routeCount: relaxedDistanceRouteCount,
+        tolerancePercent: Math.round(
+          RELAXED_DISTANCE_TOLERANCE * 100,
+        ),
       },
     });
   }

@@ -536,15 +536,15 @@ export function createServerApi(
               {
                 schemaVersion: SERVER_API_SCHEMA_VERSION,
                 requestId,
-                session: options.userData.issueSession(),
+                session: await options.userData.issueSession(),
               },
               201,
               requestId,
             );
           }
           if (request.method === "DELETE") {
-            const userId = options.userData.authenticate(request);
-            options.userData.deleteAllUserData(userId);
+            const userId = await options.userData.authenticate(request);
+            await options.userData.deleteAllUserData(userId);
             return jsonResponse(
               {
                 schemaVersion: SERVER_API_SCHEMA_VERSION,
@@ -565,14 +565,14 @@ export function createServerApi(
           );
         }
 
-        const userId = options.userData.authenticate(request);
+        const userId = await options.userData.authenticate(request);
         if (pathname === "/api/v1/saved-routes") {
           if (request.method === "GET") {
             return jsonResponse(
               {
                 schemaVersion: SERVER_API_SCHEMA_VERSION,
                 requestId,
-                routes: options.userData.listSavedRoutes(userId),
+                routes: await options.userData.listSavedRoutes(userId),
               },
               200,
               requestId,
@@ -584,7 +584,7 @@ export function createServerApi(
               {
                 schemaVersion: SERVER_API_SCHEMA_VERSION,
                 requestId,
-                route: options.userData.saveRoute(
+                route: await options.userData.saveRoute(
                   userId,
                   body,
                   request.headers.get("idempotency-key") ??
@@ -616,7 +616,7 @@ export function createServerApi(
               { allow: "DELETE" },
             );
           }
-          options.userData.deleteSavedRoute(
+          await options.userData.deleteSavedRoute(
             userId,
             savedRouteMatch[1],
           );
@@ -647,7 +647,7 @@ export function createServerApi(
             {
               schemaVersion: SERVER_API_SCHEMA_VERSION,
               requestId,
-              report: options.userData.addFieldReport(
+              report: await options.userData.addFieldReport(
                 userId,
                 feedbackMatch[1],
                 body,

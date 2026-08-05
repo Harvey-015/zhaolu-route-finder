@@ -7,6 +7,7 @@ import type {
   ProviderCallContext,
 } from "../../route-recommendation/ports.ts";
 import type { AmapWebServiceClient } from "./httpClient.ts";
+import { formatGcj02Point, wgs84ToGcj02 } from "./coordinates.ts";
 import {
   mapAmapGeocodeResponse,
   mapAmapPlaceTextResponse,
@@ -16,6 +17,15 @@ export type AmapPlaceProviderOptions = Readonly<{
   id?: string;
   city?: string;
 }>;
+
+function placeQueryVariants(query: string): readonly string[] {
+  const variants = [query];
+  const governmentMatch = query.match(/^(.*[省市区县镇])政府$/u);
+  if (governmentMatch) {
+    variants.push(`${governmentMatch[1]}人民政府`);
+  }
+  return variants;
+}
 
 export class AmapPlaceProvider implements PlaceProvider {
   readonly id: string;
@@ -64,24 +74,37 @@ export class AmapPlaceProvider implements PlaceProvider {
         retryable: false,
       });
     }
-    const placeResponse = await this.client.getJson(
-      this.id,
-      "/v3/place/text",
-      {
-        keywords: query,
-        city: this.city,
-        citylimit: "false",
-        offset: "10",
-        page: "1",
-        extensions: "base",
-        output: "JSON",
-      },
-      context,
-    );
-    const place = mapAmapPlaceTextResponse(placeResponse, {
-      providerId: this.id,
-    });
-    if (place) return place;
+    const near = request.near
+      ? formatGcj02Point(wgs84ToGcj02(request.near))
+      : undefined;
+    for (const placeQuery of placeQueryVariants(query)) {
+      try {
+        const placeResponse = await this.client.getJson(
+          this.id,
+          "/v3/place/text",
+          {
+            keywords: placeQuery,
+            location: near,
+            sortrule: near ? "distance" : undefined,
+            city: this.city,
+            citylimit: "false",
+            offset: "10",
+            page: "1",
+            extensions: "base",
+            output: "JSON",
+          },
+          context,
+        );
+        const place = mapAmapPlaceTextResponse(placeResponse, {
+          providerId: this.id,
+        });
+        if (place) return place;
+      } catch (error) {
+        if (!(error instanceof ProviderError) || !error.retryable) {
+          throw error;
+        }
+      }
+    }
 
     const geocodeResponse = await this.client.getJson(
       this.id,

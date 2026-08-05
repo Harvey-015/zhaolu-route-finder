@@ -220,7 +220,11 @@ export class AmapWebServiceClient {
       const response = await this.fetcher(url, {
         method: "GET",
         headers: { accept: "application/json" },
-        redirect: "error",
+        // Cloudflare Workers throws for `redirect: "error"` before the
+        // upstream response is available. Manual mode remains fail-closed:
+        // redirects are returned as non-OK responses and are never followed,
+        // so the API key cannot be forwarded to another origin.
+        redirect: "manual",
         signal: controller.signal,
       });
 

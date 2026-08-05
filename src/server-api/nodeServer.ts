@@ -254,7 +254,7 @@ function staticHeaders(pathname: string): Headers {
       ? "public, max-age=31536000, immutable"
       : "no-cache",
     "content-security-policy":
-      "default-src 'self'; base-uri 'none'; connect-src 'self' https://*.amap.com https://*.autonavi.com; font-src 'self' data: https://*.amap.com https://*.autonavi.com; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; object-src 'none'; script-src 'self' https://webapi.amap.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
+      "default-src 'self'; base-uri 'none'; connect-src 'self' https://*.amap.com https://*.autonavi.com; font-src 'self' data: https://*.amap.com https://*.autonavi.com; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; object-src 'none'; script-src 'self' 'unsafe-eval' https://webapi.amap.com; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
     "content-type":
       STATIC_CONTENT_TYPES[extname(pathname).toLowerCase()] ??
       "application/octet-stream",
