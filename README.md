@@ -141,9 +141,3 @@ Cloudflare Workers + D1 的公网部署与 Secret 配置见
 ## 许可证
 
 项目采用 [Apache License 2.0](LICENSE) 开源。第三方地图、卫星影像、路线和环境数据仍分别受对应 Provider 条款与数据许可证约束；代码许可证不替代这些授权。
-
-## 下一阶段
-
-开源演示站可使用 Cloudflare Workers + D1，并按需增加 R2 缓存；独立生产运营也可继续使用
-Node 容器 + SQLite。两种运行时共享同一套 Provider、推荐算法和 API 契约，部署后
-均需完成真实域名、Secret、配额、合规与只读生产烟雾验证。
