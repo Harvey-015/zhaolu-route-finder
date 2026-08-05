@@ -71,6 +71,7 @@ export function createProductionRoutePlanner(
 ): PlanScenicRoutes {
   const client = new AmapWebServiceClient({
     apiKey: options.amapWebServiceKey,
+    maxAttempts: 3,
     maxAttemptsPerMinute: options.amapMaxHttpAttemptsPerMinute,
   });
   const placeProvider = new AmapPlaceProvider(client, {

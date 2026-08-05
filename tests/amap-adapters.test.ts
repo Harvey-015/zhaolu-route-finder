@@ -166,6 +166,35 @@ test("uses POI search first and falls back to geocoding", async () => {
   assert.equal(queue.calls[1].init.redirect, "manual");
 });
 
+test("tries the formal people's-government POI name before geocoding", async () => {
+  const queue = queuedFetcher([
+    await fixture("place-text-empty.json"),
+    await fixture("place-text-success.json"),
+  ]);
+  const provider = new AmapPlaceProvider(
+    new AmapWebServiceClient({
+      apiKey: "fixture-key",
+      fetcher: queue.fetcher,
+    }),
+    { city: "景德镇" },
+  );
+
+  const place = await provider.resolve(
+    {
+      input: { kind: "query", query: "景德镇市政府" },
+    },
+    context,
+  );
+
+  assert.equal(place.source.providerId, "amap-place");
+  assert.equal(queue.calls.length, 2);
+  assert.equal(
+    queue.calls[1].url.searchParams.get("keywords"),
+    "景德镇市人民政府",
+  );
+  assert.equal(queue.calls[1].url.pathname, "/v3/place/text");
+});
+
 test("maps the first AMap POI result to a provider-neutral place", async () => {
   const queue = queuedFetcher([await fixture("place-text-success.json")]);
   const provider = new AmapPlaceProvider(

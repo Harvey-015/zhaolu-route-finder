@@ -15,6 +15,7 @@
     }
   ],
   "vars": {
+    "AMAP_CITY": "景德镇",
     "AMAP_MAX_HTTP_ATTEMPTS_PER_PLAN": "24",
     "AMAP_MAX_HTTP_ATTEMPTS_PER_MINUTE": "300",
     "AMAP_ROUTE_EXPORTS_ALLOWED": "false",

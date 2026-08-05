@@ -7,6 +7,13 @@
 [![CI](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/Harvey-015/zhaolu-route-finder/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+## 在线演示
+
+[打开 Cloudflare 公网演示站](https://zhaolu-route-finder.wuchunkai55.workers.dev)
+
+演示站默认按景德镇区域优化地点排序，仍允许搜索其他城市；路线、卫星底图与环境数据
+分别受高德和 ESA WorldCover 的可用性、额度与许可约束。
+
 ## 当前状态
 
 当前仓库已经具备可运行、可测试和可部署的完整路线推荐链路：
