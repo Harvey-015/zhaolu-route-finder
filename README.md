@@ -113,7 +113,4 @@ pnpm run test:e2e
 
 项目采用 [Apache License 2.0](LICENSE) 开源。第三方地图、卫星影像、路线和环境数据仍分别受对应 Provider 条款与数据许可证约束；代码许可证不替代这些授权。
 
-## 下一阶段
 
-选择生产容器平台并配置域名、TLS、Secret 与 SQLite 持久卷；发布后运行只读
-生产烟雾。需要多实例时，再把限流迁移到 Redis、数据层迁移到 PostgreSQL。
