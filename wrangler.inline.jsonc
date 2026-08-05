@@ -1,17 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "zhaolu-route-finder",
-  "main": "src/cloudflare/worker.ts",
+  "main": "dist/cloudflare-inline/worker.mjs",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
-  "assets": {
-    "directory": "./web-dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/_AMapService/*"]
-  },
   "d1_databases": [
     {
       "binding": "DB",

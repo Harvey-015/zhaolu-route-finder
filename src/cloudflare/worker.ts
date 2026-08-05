@@ -102,13 +102,16 @@ function createRuntime(environment: CloudflareEnvironment): Runtime {
       "AMAP_ROUTE_EXPORTS_ALLOWED",
     ),
   });
+  const worldCoverSource = new CogWorldCoverRasterSource({
+    providerId: "worldcover-scenery",
+  });
   const sceneryProvider = new WorldCoverSceneryProvider({
-    rasterSource: new R2CachedWorldCoverRasterSource({
-      bucket: environment.SCENERY_CACHE,
-      source: new CogWorldCoverRasterSource({
-        providerId: "worldcover-scenery",
-      }),
-    }),
+    rasterSource: environment.SCENERY_CACHE
+      ? new R2CachedWorldCoverRasterSource({
+          bucket: environment.SCENERY_CACHE,
+          source: worldCoverSource,
+        })
+      : worldCoverSource,
   });
   const planRoutes = createProductionRoutePlanner({
     amapWebServiceKey,
@@ -273,17 +276,20 @@ async function fetchWorker(
   request: Request,
   environment: CloudflareEnvironment,
 ): Promise<Response> {
-  let runtime: Runtime;
-  try {
-    runtime = runtimeFor(environment);
-  } catch {
-    return configurationError();
-  }
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/api/")) {
-    return runtime.api(clientRequest(request));
-  }
-  if (url.pathname.startsWith("/_AMapService/")) {
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_AMapService/")
+  ) {
+    let runtime: Runtime;
+    try {
+      runtime = runtimeFor(environment);
+    } catch {
+      return configurationError();
+    }
+    if (url.pathname.startsWith("/api/")) {
+      return runtime.api(clientRequest(request));
+    }
     if (!runtime.hasWebMap || !runtime.securityCode) {
       return new Response(null, { status: 404 });
     }

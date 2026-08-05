@@ -52,7 +52,7 @@ export interface WorkerExecutionContextBinding {
 
 export type CloudflareEnvironment = Readonly<{
   DB: D1DatabaseBinding;
-  SCENERY_CACHE: R2BucketBinding;
+  SCENERY_CACHE?: R2BucketBinding;
   ASSETS: WorkerAssetsBinding;
   AMAP_WEB_SERVICE_KEY: string;
   AMAP_WEB_JS_KEY?: string;
