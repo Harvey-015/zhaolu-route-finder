@@ -208,11 +208,13 @@ function Metric({
 function RouteCard({
   route,
   index,
+  targetDistanceMeters,
   selected,
   onSelect,
 }: Readonly<{
   route: ApiRecommendedRoute;
   index: number;
+  targetDistanceMeters: number;
   selected: boolean;
   onSelect: () => void;
 }>) {
@@ -220,11 +222,19 @@ function RouteCard({
   const green = route.scenicFeatures.greenCoverage?.value;
   const water = route.scenicFeatures.waterfrontProximity?.value;
   const built = route.scenicFeatures.builtUpExposure?.value;
+  const distanceDifference =
+    (route.distanceMeters - targetDistanceMeters) /
+    targetDistanceMeters;
+  const distanceLabel =
+    Math.abs(distanceDifference) <= 0.15
+      ? "距离合适"
+      : `距离${distanceDifference > 0 ? "偏长" : "偏短"} ${Math.round(
+          Math.abs(distanceDifference) * 100,
+        )}%`;
   const reasonLabels = route.score.reasons
     .map(({ code }) => {
       if (code === "GREENERY") return "绿地较多";
       if (code === "WATERFRONT") return "亲近水岸";
-      if (code === "DISTANCE_FIT") return "距离合适";
       return null;
     })
     .filter((label) => label !== null);
@@ -259,6 +269,7 @@ function RouteCard({
       {selected ? (
         <div className="route-details">
           <div className="reason-list">
+            <span>{distanceLabel}</span>
             {reasonLabels.map((label) => (
               <span key={label}>{label}</span>
             ))}
@@ -280,10 +291,12 @@ function RouteCard({
 
 function ResultsPanel({
   state,
+  targetDistanceMeters,
   selectedRouteId,
   onSelectRoute,
 }: Readonly<{
   state: SearchState;
+  targetDistanceMeters: number;
   selectedRouteId: string | null;
   onSelectRoute: (routeId: string) => void;
 }>) {
@@ -328,6 +341,31 @@ function ResultsPanel({
     );
   }
 
+  const warningMessages = [
+    ...(state.result.warnings.some(
+      ({ code }) => code === "DISTANCE_TOLERANCE_RELAXED",
+    )
+      ? ["部分路线使用了最多 ±25% 的距离放宽，并已在路线卡片中标明。"]
+      : []),
+    ...(state.result.warnings.some(
+      ({ code }) => code === "RESULT_COUNT_REDUCED",
+    )
+      ? ["满足距离、必经点和差异要求的路线少于请求数量。"]
+      : []),
+    ...(state.result.warnings.some(({ code }) =>
+      [
+        "SCENERY_ANCHORS_UNAVAILABLE",
+        "SCENERY_FEATURES_UNAVAILABLE",
+        "SCENERY_FEATURES_MISSING",
+      ].includes(code),
+    )
+      ? ["部分环境数据暂不可用，环境评分置信度可能降低。"]
+      : []),
+  ];
+  const distanceRelaxed = state.result.warnings.some(
+    ({ code }) => code === "DISTANCE_TOLERANCE_RELAXED",
+  );
+
   return (
     <>
       <div className="result-heading">
@@ -342,12 +380,28 @@ function ResultsPanel({
               : "result-status partial"
           }
         >
-          {state.result.status === "complete" ? "完整" : "部分数据"}
+          {state.result.status === "complete"
+            ? "完整"
+            : distanceRelaxed
+              ? "条件放宽"
+              : "部分数据"}
         </span>
       </div>
-      {state.result.warnings.length > 0 ? (
+      {state.result.requiredStops.length > 0 ? (
+        <div className="resolved-stops">
+          <strong>实际必经点</strong>
+          {state.result.requiredStops.map((stop, index) => (
+            <span key={stop.id}>
+              {index + 1}. {stop.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {warningMessages.length > 0 ? (
         <div className="warning-box">
-          部分数据源暂不可用，路线仍可查看，评分置信度可能降低。
+          {warningMessages.map((message) => (
+            <p key={message}>{message}</p>
+          ))}
         </div>
       ) : null}
       <div className="route-list">
@@ -358,6 +412,7 @@ function ResultsPanel({
             onSelect={() => onSelectRoute(route.id)}
             route={route}
             selected={route.id === selectedRouteId}
+            targetDistanceMeters={targetDistanceMeters}
           />
         ))}
       </div>
@@ -1213,8 +1268,16 @@ export function App({
         <section className="map-panel">
           <BasemapComponent
             onSelectRoute={setSelectedRouteId}
+            requiredStops={
+              search.status === "success"
+                ? search.result.requiredStops
+                : []
+            }
             routes={routes}
             selectedRouteId={selectedRouteId}
+            start={
+              search.status === "success" ? search.result.start : null
+            }
           />
         </section>
 
@@ -1223,6 +1286,10 @@ export function App({
             onSelectRoute={setSelectedRouteId}
             selectedRouteId={selectedRouteId}
             state={search}
+            targetDistanceMeters={
+              lastRequest?.targetDistanceMeters ??
+              form.distanceKilometers * 1_000
+            }
           />
           {selectedRoute ? (
             <DeliveryPanel

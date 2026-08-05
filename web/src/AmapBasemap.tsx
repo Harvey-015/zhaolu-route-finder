@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { wgs84ToGcj02 } from "../../src/adapters/amap/coordinates.ts";
 import { wgs84Point } from "../../src/route-recommendation/coordinates.ts";
-import type { ApiRecommendedRoute } from "../../src/server-api/contracts.ts";
+import type {
+  ApiPlace,
+  ApiRecommendedRoute,
+} from "../../src/server-api/contracts.ts";
 import {
   defineBasemapRenderer,
   type BasemapRenderer,
@@ -86,6 +89,14 @@ export function routeGeometryForAmap(
   });
 }
 
+export function placePointForAmap(
+  place: ApiPlace,
+): readonly [number, number] {
+  const [longitude, latitude] = place.point.coordinates;
+  const point = wgs84ToGcj02(wgs84Point(longitude, latitude));
+  return [point.longitude, point.latitude];
+}
+
 function activeLayerProviders(
   registry: MapLayerProviderRegistry<AmapMapLayerContext, AmapLayer>,
   baseLayerId: string,
@@ -120,6 +131,8 @@ function createActiveLayers(
 
 function AmapViewport({
   routes,
+  start,
+  requiredStops,
   selectedRouteId,
   onSelectRoute,
   keyValue,
@@ -225,11 +238,13 @@ function AmapViewport({
       overlays.push(line);
     });
 
-    const start = routeGeometryForAmap(selected)[0];
-    if (start) {
+    const startPoint = start
+      ? placePointForAmap(start)
+      : routeGeometryForAmap(selected)[0];
+    if (startPoint) {
       overlays.push(
         new AMap.CircleMarker({
-          center: start,
+          center: startPoint,
           radius: 9,
           strokeColor: "#102e2a",
           strokeWeight: 4,
@@ -239,17 +254,57 @@ function AmapViewport({
         }),
       );
     }
+    requiredStops.forEach((stop, index) => {
+      const position = placePointForAmap(stop);
+      overlays.push(
+        new AMap.CircleMarker({
+          center: position,
+          radius: 7,
+          strokeColor: "#102e2a",
+          strokeWeight: 3,
+          fillColor: "#ff8b5b",
+          fillOpacity: 1,
+          zIndex: 82,
+        }),
+        new AMap.Text({
+          position,
+          text: `${index + 1}. ${stop.name}`,
+          anchor: "bottom-center",
+          offset: [0, -11],
+          style: {
+            padding: "5px 7px",
+            border: "0",
+            borderRadius: "4px",
+            background: "#fffdf8",
+            color: "#102e2a",
+            fontSize: "10px",
+            fontWeight: "700",
+            boxShadow: "0 4px 12px rgba(0,0,0,.16)",
+          },
+          zIndex: 83,
+        }),
+      );
+    });
     map.add(overlays);
     map.setFitView(overlays, false, [90, 70, 110, 70]);
     overlaysRef.current = overlays;
-  }, [onSelectRoute, ready, routes, selectedRouteId]);
+  }, [
+    onSelectRoute,
+    ready,
+    requiredStops,
+    routes,
+    selectedRouteId,
+    start,
+  ]);
 
   if (failed) {
     return (
       <RouteMap
         onSelectRoute={onSelectRoute}
+        requiredStops={requiredStops}
         routes={routes}
         selectedRouteId={selectedRouteId}
+        start={start}
       />
     );
   }

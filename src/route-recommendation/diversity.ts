@@ -61,5 +61,21 @@ export function selectDiverseRoutes(
     if (selected.length >= limit) break;
   }
 
+  // Keep exact/near-exact duplicates out, but do not return fewer routes only
+  // because otherwise valid alternatives share a compulsory approach segment.
+  for (const route of ranked) {
+    if (selected.length >= limit) break;
+    if (selected.includes(route)) continue;
+    if (
+      selected.some(
+        (existing) =>
+          routeOverlapRatio(existing.route, route.route) >= 0.98,
+      )
+    ) {
+      continue;
+    }
+    selected.push(route);
+  }
+
   return selected;
 }

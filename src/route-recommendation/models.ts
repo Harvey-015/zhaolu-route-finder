@@ -142,6 +142,7 @@ export type RecommendationWarningCode =
   | "SCENERY_FEATURES_UNAVAILABLE"
   | "SCENERY_FEATURES_MISSING"
   | "ROUTE_CANDIDATE_FAILED"
+  | "DISTANCE_TOLERANCE_RELAXED"
   | "RESULT_COUNT_REDUCED";
 
 export type RecommendationWarning = Readonly<{

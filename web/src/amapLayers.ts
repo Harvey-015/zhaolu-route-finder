@@ -45,6 +45,9 @@ export type AmapNamespace = Readonly<{
   CircleMarker: new (
     options: Readonly<Record<string, unknown>>,
   ) => AmapOverlay;
+  Text: new (
+    options: Readonly<Record<string, unknown>>,
+  ) => AmapOverlay;
   TileLayer: AmapTileLayerConstructor;
 }>;
 

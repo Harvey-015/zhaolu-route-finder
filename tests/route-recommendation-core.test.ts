@@ -5,6 +5,7 @@ import {
   RecommendationAlgorithmRegistry,
 } from "../src/route-recommendation/algorithms.ts";
 import {
+  bearingDegrees,
   destinationPoint,
   distanceMeters,
   wgs84Point,
@@ -183,6 +184,24 @@ test("constructs type-safe WGS-84 points and deterministic destinations", () => 
   assert.throws(() => wgs84Point(181, 30), RangeError);
 });
 
+test("centers generated guidance around the requested direction", () => {
+  const [candidate] = generateDirectionalCandidates({
+    requestId: "north-guidance",
+    origin: startPoint,
+    mode: "running",
+    requiredStops: [],
+    scenicAnchors: [],
+    targetDistanceMeters: 10_000,
+    preferences: request().preferences,
+    count: 1,
+  });
+
+  assert.equal(candidate.directionDegrees, 0);
+  assert.equal(candidate.waypoints.length, 2);
+  assert.ok(bearingDegrees(startPoint, candidate.waypoints[0]) > 300);
+  assert.ok(bearingDegrees(startPoint, candidate.waypoints[1]) < 60);
+});
+
 test("uses route id as a stable tie-breaker for equally scored routes", () => {
   const selected = selectDiverseRoutes({
     routes: [
@@ -205,13 +224,19 @@ test("returns three deterministic routes using only fake providers", async () =>
   const result = await findScenicRoutes(request(), fakeDependencies);
 
   assert.equal(result.requestId, "request-001");
-  assert.equal(result.status, "complete");
+  assert.equal(result.status, "partial");
   assert.equal(result.routes.length, 3);
   assert.equal(result.diagnostics.sceneryDegraded, false);
   assert.deepEqual(result.diagnostics.degradedSceneryRouteIds, []);
   assert.equal(
     result.warnings.some(({ code }) => code === "SCENERY_FEATURES_MISSING"),
     false,
+  );
+  assert.equal(
+    result.warnings.some(
+      ({ code }) => code === "DISTANCE_TOLERANCE_RELAXED",
+    ),
+    true,
   );
   assert.equal(result.diagnostics.generatedCandidateCount, 3);
   assert.equal(result.diagnostics.routedCandidateCount, 3);
@@ -227,6 +252,32 @@ test("returns three deterministic routes using only fake providers", async () =>
     result.routes
       .flatMap(({ reasons }) => reasons)
       .every((reason) => !("message" in reason)),
+  );
+});
+
+test("reserves a north candidate and one fallback when a required stop is present", async () => {
+  const requiredPoint = destinationPoint(startPoint, 800, 315);
+  const routeProvider = new FakeRouteProvider();
+  const result = await findScenicRoutes(
+    request({
+      start: { kind: "point", point: startPoint, label: "Start" },
+      requiredStops: [
+        { kind: "point", point: requiredPoint, label: "Required" },
+      ],
+    }),
+    {
+      ...dependencies(routeProvider),
+      placeProvider: new FakePlaceProvider(),
+    },
+  );
+
+  assert.equal(result.routes.length, 3);
+  assert.equal(routeProvider.calls.length, 4);
+  assert.deepEqual(
+    routeProvider.calls
+      .map(({ candidate }) => candidate.directionDegrees)
+      .sort((left, right) => left - right),
+    [0, 90, 180, 270],
   );
 });
 
@@ -251,9 +302,9 @@ test("uses an injected candidate generation strategy", async () => {
   });
 
   assert.equal(receivedMode, "running");
-  assert.equal(receivedCount, 2);
+  assert.equal(receivedCount, 12);
   assert.deepEqual(
-    routeProvider.calls.map(({ candidate }) => candidate.id),
+    routeProvider.calls.map(({ candidate }) => candidate.id).sort(),
     ["custom-candidate-1", "custom-candidate-2"],
   );
   assert.equal(result.diagnostics.generatedCandidateCount, 2);
@@ -262,20 +313,26 @@ test("uses an injected candidate generation strategy", async () => {
 
 test("uses an injected route selection strategy and enforces maxResults", async () => {
   let receivedLimit = 0;
+  const routeProvider = new FakeRouteProvider();
   const routeSelectionStrategy: RouteSelectionStrategy = (input) => {
     receivedLimit = input.limit;
     return [...input.routes].reverse();
   };
 
   const result = await findScenicRoutes(request({ maxResults: 2 }), {
-    ...dependencies(),
+    ...dependencies(routeProvider),
     routeSelectionStrategy,
   });
 
   assert.equal(receivedLimit, 2);
   assert.equal(result.routes.length, 2);
-  assert.ok(result.routes[0].route.candidateId.endsWith("02"));
-  assert.ok(result.routes[1].route.candidateId.endsWith("01"));
+  assert.deepEqual(
+    result.routes.map(({ route }) => route.candidateId),
+    routeProvider.calls
+      .map(({ candidate }) => candidate.id)
+      .reverse()
+      .slice(0, 2),
+  );
 });
 
 test("maps an unknown candidate strategy failure to a safe INTERNAL_ERROR", async () => {
@@ -363,12 +420,167 @@ test("maps required-stop resolution failure to PLACE_NOT_FOUND", async () => {
   );
 });
 
-test("keeps a partial result when individual route candidates fail", async () => {
+test("fills the result count with distinct routes that share a compulsory segment", () => {
+  const shared = Array.from({ length: 9 }, (_, index) =>
+    wgs84Point(120 + index * 0.001, 30),
+  );
+  const first = equallyScoredRoute("shared-a", 0);
+  const second = equallyScoredRoute("shared-b", 0);
+  const routes = [
+    {
+      ...first,
+      route: {
+        ...first.route,
+        geometry: [...shared, wgs84Point(120.009, 30)],
+      },
+    },
+    {
+      ...second,
+      route: {
+        ...second.route,
+        geometry: [...shared, wgs84Point(120.009, 30.01)],
+      },
+    },
+  ];
+
+  const selected = selectDiverseRoutes({
+    routes,
+    limit: 2,
+    maxOverlapRatio: 0.82,
+  });
+
+  assert.equal(selected.length, 2);
+});
+
+test("keeps required stops in order while inserting guidance at the cheapest gap", () => {
+  const firstStop = {
+    id: "stop-1",
+    name: "第一站",
+    point: destinationPoint(startPoint, 1_000, 90),
+    source: { providerId: "fixture-place" },
+  } satisfies ResolvedPlace;
+  const secondStop = {
+    id: "stop-2",
+    name: "第二站",
+    point: destinationPoint(startPoint, 1_000, 180),
+    source: { providerId: "fixture-place" },
+  } satisfies ResolvedPlace;
+  const candidates = generateDirectionalCandidates({
+    requestId: "ordered-stops",
+    origin: startPoint,
+    mode: "running",
+    requiredStops: [firstStop, secondStop],
+    scenicAnchors: [],
+    targetDistanceMeters: 10_000,
+    preferences: request().preferences,
+    count: 3,
+  });
+
+  candidates.forEach(({ waypoints }) => {
+    const firstIndex = waypoints.indexOf(firstStop.point);
+    const secondIndex = waypoints.indexOf(secondStop.point);
+    assert.ok(firstIndex >= 0);
+    assert.ok(secondIndex > firstIndex);
+  });
+});
+
+test("marks routes between fifteen and twenty-five percent off target as relaxed", async () => {
   const routeProvider = new FakeRouteProvider({
-    failureForCandidate: (candidate) =>
-      candidate.id.endsWith("02") || candidate.id.endsWith("03")
-        ? "UNAVAILABLE"
-        : undefined,
+    routeFactory: (candidate): RoutedRoute => ({
+      id: `relaxed:${candidate.id}`,
+      candidateId: candidate.id,
+      geometry: [candidate.origin, ...candidate.waypoints, candidate.destination],
+      segments: [],
+      distanceMeters: 12_000,
+      durationSeconds: 4_000,
+      directionDegrees: candidate.directionDegrees,
+      source: { providerId: "fake-route" },
+    }),
+  });
+
+  const result = await findScenicRoutes(request(), dependencies(routeProvider));
+
+  assert.ok(result.routes.length > 0);
+  assert.ok(
+    result.warnings.some(
+      ({ code }) => code === "DISTANCE_TOLERANCE_RELAXED",
+    ),
+  );
+});
+
+test("rejects routes outside the twenty-five percent distance boundary", async () => {
+  const routeProvider = new FakeRouteProvider({
+    routeFactory: (candidate): RoutedRoute => ({
+      id: `too-long:${candidate.id}`,
+      candidateId: candidate.id,
+      geometry: [candidate.origin, ...candidate.waypoints, candidate.destination],
+      segments: [],
+      distanceMeters: 14_000,
+      durationSeconds: 4_000,
+      directionDegrees: candidate.directionDegrees,
+      source: { providerId: "fake-route" },
+    }),
+  });
+
+  await assert.rejects(
+    () => findScenicRoutes(request(), dependencies(routeProvider)),
+    (error: unknown) =>
+      error instanceof RouteRecommendationError &&
+      error.code === "NO_SUITABLE_ROUTE",
+  );
+});
+
+test("rejects provider geometry that does not visit a required stop", async () => {
+  const requiredPlace = {
+    id: "required-place",
+    name: "必经公园",
+    point: destinationPoint(startPoint, 1_000, 90),
+    source: { providerId: "fake-place" },
+  } satisfies ResolvedPlace;
+  const routeProvider = new FakeRouteProvider({
+    routeFactory: (candidate): RoutedRoute => ({
+      id: `missing-stop:${candidate.id}`,
+      candidateId: candidate.id,
+      geometry: [
+        candidate.origin,
+        destinationPoint(candidate.origin, 100, 180),
+        candidate.destination,
+      ],
+      segments: [],
+      distanceMeters: 10_000,
+      durationSeconds: 4_000,
+      directionDegrees: candidate.directionDegrees,
+      source: { providerId: "fake-route" },
+    }),
+  });
+
+  await assert.rejects(
+    () =>
+      findScenicRoutes(
+        request({
+          requiredStops: [{ kind: "query", query: "必经公园" }],
+        }),
+        {
+          ...dependencies(routeProvider),
+          placeProvider: new FakePlaceProvider({
+            "杭州西湖": startPlace,
+            "必经公园": requiredPlace,
+          }),
+        },
+      ),
+    (error: unknown) =>
+      error instanceof RouteRecommendationError &&
+      error.code === "NO_SUITABLE_ROUTE",
+  );
+});
+
+test("keeps a partial result when individual route candidates fail", async () => {
+  let candidateCall = 0;
+  const routeProvider = new FakeRouteProvider({
+    failureForCandidate: () => {
+      candidateCall += 1;
+      return candidateCall > 1 ? "UNAVAILABLE" : undefined;
+    },
   });
   const result = await findScenicRoutes(request(), {
     ...dependencies(routeProvider),
@@ -620,11 +832,11 @@ test("removes routes whose normalized geometry is effectively identical", async 
         {
           index: 0,
           geometry: fixedGeometry,
-          distanceMeters: fixedDistance,
+          distanceMeters: 10_000,
           durationSeconds: 3_600,
         },
       ],
-      distanceMeters: fixedDistance,
+      distanceMeters: 10_000,
       durationSeconds: 3_600,
       directionDegrees: candidate.directionDegrees,
       source: { providerId: "fake-route" },

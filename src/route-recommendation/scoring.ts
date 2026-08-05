@@ -76,12 +76,13 @@ export class ScenicScoreV1 implements RouteScoringPolicy {
       0,
       100,
     );
-    const reasons: RecommendationReason[] = [
-      {
+    const reasons: RecommendationReason[] = [];
+    if (distanceFit >= 85) {
+      reasons.push({
         code: "DISTANCE_FIT",
         contribution: distanceFit,
-      },
-    ];
+      });
+    }
     if (greenery >= 60) {
       reasons.push({
         code: "GREENERY",

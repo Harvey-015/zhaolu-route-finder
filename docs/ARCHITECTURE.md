@@ -435,8 +435,8 @@ type RouteSelectionStrategy = (
 ```ts
 const algorithm = defineRecommendationAlgorithm({
   id: "scenic-route",
-  version: "1",
-  displayName: "风景环线推荐 v1",
+  version: "2",
+  displayName: "风景环线推荐 v2",
   candidateGenerationStrategy,
   scoringPolicy,
   routeSelectionStrategy,
@@ -511,7 +511,7 @@ china-default
 ├─ geocoding: AMap（POI 未命中时兜底）
 ├─ places: AMap POI text search
 ├─ scenery: ESA WorldCover
-├─ recommendationAlgorithm: scenic-route@1
+├─ recommendationAlgorithm: scenic-route@2
 └─ navigation: AMap
 ```
 
@@ -882,8 +882,13 @@ Core 不反向依赖 Adapters
 
 ### 14.1 在线推荐性能策略
 
-- 候选数量由请求的 `maxResults` 决定，并继续受 `maxCandidates` 与
-  `maxRouteProviderCalls` 双重上限保护；默认不会为了返回一条路线固定生成六条候选。
+- 核心先生成 12 条不调用道路 Provider 的本地候选骨架，再按直线估距、环境锚点排名和
+  方向差异预筛。只有预筛结果会调用道路 Provider；在线数量继续受 `maxCandidates`、
+  `maxRouteProviderCalls` 和剩余物理 HTTP 预算共同约束。没有环境锚点时默认只规划
+  `maxResults` 条，保持普通路线的响应速度。
+- 目标距离优先使用 ±15% 容差；只有 ±25% 内的结果可以作为明确标注的放宽路线返回。
+  每条路线还必须按顺序贴近所有必经点。超过 ±25% 时仅在剩余预算足够的情况下进行一次
+  引导点缩放重试，不执行无上限迭代。
 - 道路 Provider 使用有上限的候选并发，默认最多同时处理三个候选；物理 HTTP 调用预算、
   每分钟配额和取消信号仍由核心统一约束。
 - 风景 Provider 有独立的锚点与评分软等待预算。环境数据过慢时先返回真实道路路线和

@@ -23,8 +23,8 @@ import type { PlanScenicRoutes } from "./handler.ts";
 export const defaultRecommendationAlgorithm =
   defineRecommendationAlgorithm({
     id: "scenic-route",
-    version: "1",
-    displayName: "风景环线推荐 v1",
+    version: "2",
+    displayName: "风景环线推荐 v2",
     candidateGenerationStrategy: generateDirectionalCandidates,
     scoringPolicy: new ScenicScoreV1(),
     routeSelectionStrategy: selectDiverseRoutes,

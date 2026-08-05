@@ -76,6 +76,32 @@ export function bearingDegrees(
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
+export function pathDirectionDegrees(
+  origin: Wgs84Point,
+  path: readonly Wgs84Point[],
+): number {
+  if (path.length === 0) return 0;
+  const longitudeScale = Math.cos((origin.latitude * Math.PI) / 180);
+  const centroid = path.reduce(
+    (sum, point) => ({
+      east:
+        sum.east +
+        (point.longitude - origin.longitude) * longitudeScale,
+      north: sum.north + point.latitude - origin.latitude,
+    }),
+    { east: 0, north: 0 },
+  );
+  if (Math.abs(centroid.east) + Math.abs(centroid.north) < 1e-12) {
+    const farthest = [...path].sort(
+      (left, right) =>
+        distanceMeters(origin, right) - distanceMeters(origin, left),
+    )[0];
+    return farthest ? bearingDegrees(origin, farthest) : 0;
+  }
+  return ((Math.atan2(centroid.east, centroid.north) * 180) / Math.PI +
+    360) % 360;
+}
+
 export function destinationPoint(
   origin: Wgs84Point,
   distance: number,

@@ -1,8 +1,13 @@
 import type { ComponentType } from "react";
-import type { ApiRecommendedRoute } from "../../src/server-api/contracts.ts";
+import type {
+  ApiPlace,
+  ApiRecommendedRoute,
+} from "../../src/server-api/contracts.ts";
 
 export type BasemapViewportProps = Readonly<{
   routes: readonly ApiRecommendedRoute[];
+  start: ApiPlace | null;
+  requiredStops: readonly ApiPlace[];
   selectedRouteId: string | null;
   onSelectRoute: (routeId: string) => void;
 }>;

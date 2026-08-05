@@ -9,7 +9,7 @@
 
 ## 当前状态
 
-七个阶段的仓库实现已经完成：
+当前仓库已经具备可运行、可测试和可部署的完整路线推荐链路：
 
 - 与地图供应商无关的地点、路线、环境特征和评分模型；
 - WGS-84 与 GCJ-02 类型边界；
@@ -27,6 +27,10 @@
 - ESA WorldCover COG 环境特征 Adapter 和受控在线冒烟；
 - 版本化 Server API、OpenAPI、健康检查和本地 HTTP 冒烟；
 - React Web UI、当前位置、最多三个必经点、路线条件和结果比较；
+- 必经点按用户顺序进入真实道路规划，并对最终几何进行 80 米内的逐点复核；
+- 目标距离优先控制在 ±15%，必要时最多放宽到 ±25%，超过边界的路线不会进入结果；
+- 本地生成 12 个方向候选；有必经点时为北、东、南、西保留在线规划名额和备用候选；
+- 路线方向根据高德返回的真实几何计算，环境偏好同时影响候选引导和最终评分；
 - 可注入 `BasemapRenderer` 与独立的 `MapLayerProvider` 注册表；
 - 高德 JS API 2.0 默认卫星图 + 路网、标准图切换、服务端安全密钥代理和无 Key SVG 降级；
 - 桌面和移动端浏览器验收；
@@ -39,10 +43,11 @@
 - 启动配置校验、限流、探针、指标、脱敏日志和优雅关闭；
 - SQLite 在线备份、自动恢复验证和 Prometheus 告警规则；
 - 多城市实网验收、受控压测、静态 Secret 扫描和生产依赖审计；
-- 覆盖核心、Provider、API、持久化和 Web 客户端的完整自动化测试集。
+- 覆盖核心、Provider、API、持久化和 Web 客户端的完整自动化测试集（当前 135 项）。
 
 服务端 Key 和会话签名 Secret 只通过环境变量注入，仓库不包含任何真实 Secret。
-实际生产发布仍需要外部容器平台、域名、TLS、Secret 注入和持久数据卷。
+仓库同时提供 Cloudflare Workers + D1 和 Node.js + SQLite 两种运行方式。公网部署仍需
+由运营者配置域名白名单、Provider Secret、配额与合规信息；真实 Secret 不进入 Git。
 
 ## 架构边界
 
@@ -59,7 +64,7 @@ findScenicRoutes
 ```
 
 默认产品组合为：高德 JS API 地图渲染、高德卫星/标准底图、高德 POI 与路线规划、
-ESA WorldCover 环境分析、`scenic-route@1` 推荐算法，以及高德导航交接。地图渲染器、
+ESA WorldCover 环境分析、`scenic-route@2` 推荐算法，以及高德导航交接。地图渲染器、
 可见底图/参考图层、地点与道路 Provider、环境数据 Provider、推荐算法 Profile 和路线
 交付 Provider 均在组合根注册，可以分别替换，不要求修改路线核心或页面条件分支。
 
@@ -93,6 +98,22 @@ pnpm run test:e2e
 
 `test:e2e` 会启动本地 Fixture API 与 Vite，并用 Chromium 验证路线生成、
 收藏和刷新恢复主流程；CI 会自动安装对应浏览器。
+
+## 本地体验完整版本
+
+准备好 `.env` 中的高德 Key 和至少 32 字符的会话密钥后，在 PowerShell 中运行：
+
+```powershell
+pnpm run build
+$env:ZHAOLU_PUBLIC_ORIGIN = "http://127.0.0.1:8787"
+node --env-file=.env dist/runtime/main.js
+```
+
+然后访问 `http://127.0.0.1:8787`。该地址同时提供网页、Server API 和高德安全代理，
+因此测试到的是完整路线算法，而不是静态界面预览。
+
+Cloudflare Workers + D1 的公网部署与 Secret 配置见
+[Cloudflare 部署文档](docs/CLOUDFLARE_DEPLOYMENT.md)。
 
 ## 参与开发
 

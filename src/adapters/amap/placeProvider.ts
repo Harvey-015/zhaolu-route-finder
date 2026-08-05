@@ -7,6 +7,7 @@ import type {
   ProviderCallContext,
 } from "../../route-recommendation/ports.ts";
 import type { AmapWebServiceClient } from "./httpClient.ts";
+import { formatGcj02Point, wgs84ToGcj02 } from "./coordinates.ts";
 import {
   mapAmapGeocodeResponse,
   mapAmapPlaceTextResponse,
@@ -64,11 +65,16 @@ export class AmapPlaceProvider implements PlaceProvider {
         retryable: false,
       });
     }
+    const near = request.near
+      ? formatGcj02Point(wgs84ToGcj02(request.near))
+      : undefined;
     const placeResponse = await this.client.getJson(
       this.id,
       "/v3/place/text",
       {
         keywords: query,
+        location: near,
+        sortrule: near ? "distance" : undefined,
         city: this.city,
         citylimit: "false",
         offset: "10",

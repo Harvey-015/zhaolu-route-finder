@@ -93,6 +93,7 @@ function EmptyMap() {
 
 export function RouteMap({
   routes,
+  requiredStops,
   selectedRouteId,
   onSelectRoute,
 }: BasemapViewportProps) {
@@ -102,6 +103,23 @@ export function RouteMap({
     projected.find(({ route }) => route.id === selectedRouteId) ??
     projected[0];
   const startPoint = selected.points[0];
+  const requiredStopPoints = requiredStops.map((stop) => {
+    const [stopLongitude, stopLatitude] = stop.point.coordinates;
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    selected.route.geometry.coordinates.forEach(
+      ([longitude, latitude], index) => {
+        const distance =
+          (longitude - stopLongitude) ** 2 +
+          (latitude - stopLatitude) ** 2;
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      },
+    );
+    return { stop, point: selected.points[closestIndex] };
+  });
 
   return (
     <div className="route-map-wrap">
@@ -177,6 +195,21 @@ export function RouteMap({
             </g>
           );
         })}
+        {requiredStopPoints.map(({ stop, point }, index) =>
+          point ? (
+            <g
+              className="required-stop-marker"
+              key={stop.id}
+              transform={`translate(${point.x} ${point.y})`}
+            >
+              <title>{`${index + 1}. ${stop.name}`}</title>
+              <circle r="13" />
+              <text dominantBaseline="central" textAnchor="middle">
+                {index + 1}
+              </text>
+            </g>
+          ) : null,
+        )}
         {startPoint ? (
           <g transform={`translate(${startPoint.x} ${startPoint.y})`}>
             <circle className="start-halo" r="22" />
