@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/route-delivery/**/*.ts",
+    "src/user-data/**/*.ts",
+    "tests/route-delivery.test.ts",
+    "tests/user-data.test.ts",
+    "tests/fixtures/delivery.ts"
+  ]
+}

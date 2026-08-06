@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/adapters/worldcover/**/*.ts",
+    "scripts/smoke-worldcover.ts",
+    "tests/worldcover-adapter.test.ts",
+    "tests/worldcover-smoke.test.ts",
+    "tests/types/worldcover-adapter.types.ts"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/adapters/amap/**/*.ts",
+    "scripts/smoke-amap.ts",
+    "tests/amap-adapters.test.ts",
+    "tests/amap-smoke.test.ts",
+    "tests/types/amap-adapters.types.ts"
+  ]
+}

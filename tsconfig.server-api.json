@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/server-api/**/*.ts",
+    "scripts/smoke-server-api.ts",
+    "tests/server-api.test.ts",
+    "tests/server-api-smoke.test.ts",
+    "tests/types/server-api.types.ts"
+  ]
+}
