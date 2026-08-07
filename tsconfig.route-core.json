@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/route-recommendation/**/*.ts",
+    "tests/route-recommendation-core.test.ts",
+    "tests/scoring.test.ts",
+    "tests/types/route-recommendation.types.ts"
+  ]
+}

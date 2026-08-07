@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/cloudflare/bindings.ts",
+    "src/cloudflare/d1UserDataStore.ts",
+    "src/cloudflare/r2WorldCoverCache.ts",
+    "tests/cloudflare-adapters.test.ts",
+    "tests/fixtures/delivery.ts"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "web/src/amapLayers.ts",
+    "web/src/api.ts",
+    "web/src/basemap.ts",
+    "web/src/delivery.ts",
+    "web/src/legal.ts",
+    "web/src/mapConfig.ts",
+    "web/src/mapLayers.ts",
+    "web/src/model.ts",
+    "web/src/userDataApi.ts",
+    "tests/web-client.test.ts",
+    "tests/fixtures/delivery.ts"
+  ]
+}
